@@ -1,0 +1,39 @@
+name: Daily Stock Crawler
+
+on:
+  schedule:
+    # 設定排程時間 (這是 UTC 時間)
+    # 台灣時間是 UTC+8
+    # 我們希望台灣時間下午 16:30 (收盤後資料較穩)
+    # 16:30 - 8小時 = 08:30 UTC
+    # 格式為: 分 時 日 月 週 (1-5 代表週一到週五)
+    - cron: '30 11 * * 1-5'
+  
+  # 允許手動點擊按鈕觸發 (方便測試或補跑)
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code (下載程式碼)
+      uses: actions/checkout@v3
+
+    - name: Set up Python (安裝 Python環境)
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.12'
+
+    - name: Install dependencies (安裝套件)
+      run: |
+        pip install -r requirements.txt
+
+    - name: Create Key File (從保險箱取出鑰匙)
+      # 這個步驟非常重要！它會把 Secret 裡的內容變回 json 檔
+      run: |
+        echo '${{ secrets.GCP_CREDENTIALS }}' > service_account.json
+
+    - name: Run Crawler (執行主程式)
+      run: |
+        python main.py
