@@ -3,3 +3,5 @@ requests
 gspread
 oauth2client
 yfinance
+streamlit
+plotly
