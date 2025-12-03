@@ -16,7 +16,7 @@ st.set_page_config(
     page_icon="📈"
 )
 
-# --- CSS 全域美化 (針對截圖問題的專項修復) ---
+# --- CSS 全域美化 (針對截圖中下拉選單彈出層的修復) ---
 custom_css = """
     <style>
         /* 0. 根變數覆寫 (基底) */
@@ -39,13 +39,11 @@ custom_css = """
             font-family: 'Helvetica Neue', 'PingFang TC', 'Microsoft JhengHei', sans-serif;
         }
         
-        /* 3. 【修復】Radio 按鈕旁的文字消失問題 */
-        /* 強制所有 Radio 選項的文字容器變黑 */
+        /* 3. Radio 按鈕旁的文字消失問題 */
         div[data-baseweb="radio"] div {
             color: #333333 !important;
             font-weight: 500 !important;
         }
-        /* 針對 Radio Group 的標籤 */
         div[role="radiogroup"] label {
             color: #333333 !important;
         }
@@ -55,12 +53,12 @@ custom_css = """
             background-color: #FFFFFF;
             border: 1px solid #E0E0E0;
             border-radius: 8px;
-            color: #333333 !important; /* 強制深黑 */
+            color: #333333 !important;
         }
         .streamlit-expanderHeader p {
             font-weight: 600;
             font-size: 15px;
-            color: #222222 !important; /* 加深標題顏色 */
+            color: #222222 !important;
         }
         .streamlit-expanderContent {
             background-color: #F9F9F7;
@@ -81,12 +79,40 @@ custom_css = """
             font-weight: 500 !important;
         }
         
-        /* 6. Slider 滑桿數值 */
+        /* 6. 【關鍵修復】下拉選單彈出層 (Options Menu) */
+        /* 強制彈出層的背景為白色 */
+        ul[data-baseweb="menu"] {
+            background-color: #FFFFFF !important;
+            border: 1px solid #E0E0E0 !important;
+        }
+        /* 強制選項文字為深色 */
+        li[data-baseweb="option"] {
+            color: #333333 !important;
+        }
+        /* 確保選項內的文字容器也是深色 */
+        li[data-baseweb="option"] div {
+             color: #333333 !important;
+        }
+        /* 滑鼠滑過選項時的背景色 (淺灰) */
+        li[data-baseweb="option"]:hover {
+            background-color: #F0F0F0 !important;
+        }
+        /* 被選中的選項樣式 */
+        li[data-baseweb="option"][aria-selected="true"] {
+             background-color: #E67F75 !important; /* 使用主題紅 */
+             color: #FFFFFF !important; /* 選中時文字變白 */
+        }
+        li[data-baseweb="option"][aria-selected="true"] div {
+             color: #FFFFFF !important;
+        }
+
+
+        /* 7. Slider 滑桿數值 */
         div[data-baseweb="slider"] div[role="slider"] {
             color: #333333 !important;
         }
         
-        /* 7. 分頁籤優化 */
+        /* 8. 分頁籤優化 */
         .stTabs [data-baseweb="tab-list"] { gap: 8px; }
         .stTabs [data-baseweb="tab"] {
             height: 40px;
@@ -101,7 +127,7 @@ custom_css = """
             font-weight: bold;
         }
         
-        /* 8. Metric 指標顏色 */
+        /* 9. Metric 指標顏色 */
         [data-testid="stMetricLabel"] { font-size: 14px !important; color: #444444 !important; }
         [data-testid="stMetricValue"] { font-size: 20px !important; color: #222222 !important; }
         
@@ -282,24 +308,24 @@ with tab2:
             fig.add_trace(go.Bar(x=df_chart["日期"], y=df_chart["估算張數"], name="每日", marker_color=df_chart["顏色"], opacity=0.8), secondary_y=False)
             fig.add_trace(go.Scatter(x=df_chart["日期"], y=df_chart["累積張數"], name="庫存", line=dict(color='#2C3E50', width=2), mode='lines'), secondary_y=True)
 
-            # 【關鍵修復】圖表字體顏色強制深色 (解決圖七座標軸看不清問題)
+            # 【關鍵修復】圖表字體顏色強制深色
             fig.update_layout(
                 title=dict(text="籌碼分佈趨勢", font=dict(color='#333333', size=16)),
                 plot_bgcolor='#FFFFFF',
                 paper_bgcolor='#FFFFFF',
-                font=dict(color='#333333'), # 全域圖表字體設為深灰
+                font=dict(color='#333333'),
                 legend=dict(orientation="h", y=1.1, x=0, font=dict(color='#333333')),
                 height=350,
                 margin=dict(l=15, r=15, t=50, b=10),
                 xaxis=dict(
                     showgrid=False, 
-                    tickfont=dict(color='#333333', size=12), # 座標軸文字改為深色
+                    tickfont=dict(color='#333333', size=12),
                     title_font=dict(color='#333333')
                 ),
                 yaxis=dict(
                     showgrid=True, 
                     gridcolor="#F0F0F0", 
-                    tickfont=dict(color='#333333', size=12) # Y軸文字改為深色
+                    tickfont=dict(color='#333333', size=12)
                 )
             )
             
