@@ -16,7 +16,7 @@ st.set_page_config(
     page_icon="📈"
 )
 
-# --- CSS 全域美化 (修復篩選文字與圖表樣式) ---
+# --- CSS 全域美化 (終極修正：強制輸入框白底黑字) ---
 custom_css = """
     <style>
         /* 1. 背景色 */
@@ -35,11 +35,42 @@ custom_css = """
             padding-bottom: 10px !important;
         }
         
-        /* 3. 隱藏 footer */
-        #MainMenu {visibility: hidden;}
-        footer {visibility: hidden;}
+        /* 3. Expander 樣式 */
+        .streamlit-expanderHeader {
+            background-color: #FFFFFF;
+            border: 1px solid #E0E0E0;
+            border-radius: 8px;
+            color: #333333 !important;
+        }
+        .streamlit-expanderHeader p {
+            font-weight: 600;
+            font-size: 15px;
+        }
+
+        /* 4. 【關鍵修正】強制所有輸入框 (Input/Select) 變為白底黑字 */
+        /* 下拉選單 (Selectbox) 與 數字輸入 (NumberInput) 的外框 */
+        div[data-baseweb="select"] > div, 
+        div[data-baseweb="input"] > div {
+            background-color: #FFFFFF !important; /* 強制白底 */
+            color: #333333 !important;            /* 強制黑字 */
+            border-color: #CCCCCC !important;     /* 加上邊框 */
+        }
         
-        /* 4. 分頁籤優化 */
+        /* 輸入框內的文字顏色 */
+        div[data-baseweb="select"] span, 
+        div[data-baseweb="input"] input {
+            color: #333333 !important;
+        }
+        
+        /* 下拉選單彈出的列表 (Options) */
+        ul[data-baseweb="menu"] {
+            background-color: #FFFFFF !important;
+        }
+        li[data-baseweb="option"] {
+            color: #333333 !important;
+        }
+        
+        /* 5. 分頁籤優化 */
         .stTabs [data-baseweb="tab-list"] {
             gap: 8px;
         }
@@ -59,48 +90,19 @@ custom_css = """
             font-weight: bold;
         }
         
-        /* 5. 指標 (Metric) 顏色修正 */
-        [data-testid="stMetricLabel"] { 
-            font-size: 14px !important; 
-            color: #444444 !important; 
-            font-weight: 500;
+        /* 6. 指標 (Metric) 顏色修正 */
+        [data-testid="stMetricLabel"] { font-size: 14px !important; color: #444444 !important; font-weight: 500; }
+        [data-testid="stMetricValue"] { font-size: 20px !important; color: #222222 !important; font-weight: 600; }
+        
+        /* 7. 全域標籤強制深色 */
+        .stMarkdown, .stMarkdown p, .stText, h2, h3, label, .stSlider p {
+            color: #333333 !important;
         }
-        [data-testid="stMetricValue"] { 
-            font-size: 20px !important; 
-            color: #222222 !important; 
-            font-weight: 600;
-        }
+        
+        /* 隱藏 footer */
+        #MainMenu {visibility: hidden;}
+        footer {visibility: hidden;}
 
-        /* 6. 【關鍵修正】強制 Expander 內部所有文字為深色 */
-        /* 針對 Expander 的標題 */
-        .streamlit-expanderHeader p {
-            color: #333333 !important;
-            font-weight: 600;
-            font-size: 15px;
-        }
-        .streamlit-expanderHeader {
-            background-color: #FFFFFF;
-            border: 1px solid #E0E0E0;
-            border-radius: 8px;
-        }
-        
-        /* 針對 Expander 內部的所有 Label (Radio, Slider, Selectbox) */
-        [data-testid="stExpander"] label p {
-            color: #333333 !important;
-            font-weight: 500;
-        }
-        [data-testid="stExpander"] div[data-baseweb="select"] div {
-            color: #333333 !important;
-        }
-        [data-testid="stExpander"] p {
-            color: #333333 !important;
-        }
-        
-        /* 7. 全域文字強制深色 */
-        .stMarkdown, .stMarkdown p, .stText, h2, h3 {
-            color: #333333 !important;
-        }
-        
     </style>
 """
 st.markdown(custom_css, unsafe_allow_html=True)
@@ -275,30 +277,17 @@ with tab2:
             fig.add_trace(go.Scatter(x=df_chart["日期"], y=df_chart["累積張數"], name="庫存", line=dict(color='#2C3E50', width=2), mode='lines'), secondary_y=True)
 
             fig.update_layout(
-                # 【修正 1】補回標題文字，並設定字體顏色
                 title=dict(text="籌碼分佈趨勢", font=dict(color='#333333', size=16)),
-                
-                # 【修正 2】圖表背景設為白色，加上卡片感
                 plot_bgcolor='#FFFFFF',
                 paper_bgcolor='#FFFFFF',
-                
-                # 字體強制深色
                 font=dict(color='#333333'),
                 legend=dict(orientation="h", y=1.1, x=0, font=dict(color='#333333')),
-                
                 height=350,
-                margin=dict(l=15, r=15, t=50, b=10), # 稍微增加邊距
-                
+                margin=dict(l=15, r=15, t=50, b=10),
                 xaxis=dict(showgrid=False, tickfont=dict(color='#555555'), title_font=dict(color='#333333')),
                 yaxis=dict(showgrid=True, gridcolor="#F0F0F0", tickfont=dict(color='#555555'))
             )
-            
-            # 【修正 3】關閉縮放功能 (避免手機滑動誤觸)
-            st.plotly_chart(
-                fig, 
-                use_container_width=True, 
-                config={'displayModeBar': False, 'staticPlot': False, 'scrollZoom': False}
-            )
+            st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False, 'staticPlot': False, 'scrollZoom': False})
             
             with st.expander("📄 詳細數據"):
                 st.dataframe(df_chart[["日期", "收盤價", "估算張數", "累積張數"]], use_container_width=True, hide_index=True)
