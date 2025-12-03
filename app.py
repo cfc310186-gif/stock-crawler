@@ -16,14 +16,12 @@ st.set_page_config(
     page_icon="📈"
 )
 
-# --- CSS 全域美化 (瀏覽器內核強制亮色修正) ---
+# --- CSS 全域美化 (無差別強制覆寫版) ---
 custom_css = """
     <style>
-        /* 0. 【核彈級修正】強制瀏覽器使用「亮色模式」渲染 
-           這行 color-scheme: light; 會直接禁止手機瀏覽器把下拉選單變黑
-        */
+        /* 0. 瀏覽器層級強制亮色 */
         :root {
-            color-scheme: light; /* 關鍵指令！ */
+            color-scheme: light;
             --primaryColor: #E67F75;
             --backgroundColor: #F9F9F7;
             --secondaryBackgroundColor: #FFFFFF;
@@ -36,7 +34,7 @@ custom_css = """
             background-color: #F9F9F7;
         }
         
-        /* 2. 標題與一般文字強制深色 */
+        /* 2. 標題與一般文字 */
         h1 {
             color: #333333 !important;
             font-family: 'Helvetica Neue', 'PingFang TC', 'Microsoft JhengHei', sans-serif;
@@ -50,7 +48,7 @@ custom_css = """
             color: #333333 !important;
         }
         
-        /* 3. 輸入框 (Input/Select) 強制白底黑字 */
+        /* 3. 輸入框 (Input/Select) 初始狀態 */
         div[data-baseweb="select"] > div, 
         div[data-baseweb="input"] > div {
             background-color: #FFFFFF !important;
@@ -64,44 +62,42 @@ custom_css = """
             font-weight: 500 !important;
         }
         
-        /* 4. 【下拉選單彈出層 - 雙重保險】 */
-        /* 即便 color-scheme 失效，這裡的 CSS 也會強制塗白 */
+        /* 4. 【核彈級修復】下拉選單浮動視窗 (Popover) */
+        /* 使用通用選擇器 * 強制覆寫視窗內「所有」層級的顏色 */
         
-        div[data-baseweb="popover"],
-        div[data-baseweb="popover"] > div,
-        ul[data-baseweb="menu"] {
+        div[data-baseweb="popover"] {
             background-color: #FFFFFF !important;
+            border: 1px solid #E0E0E0 !important;
         }
         
-        li[data-baseweb="option"] {
+        /* 視窗內的所有子元素：背景全白、文字全黑 */
+        div[data-baseweb="popover"] * {
             background-color: #FFFFFF !important;
             color: #333333 !important;
         }
         
-        /* 確保文字容器也是深色 */
-        li[data-baseweb="option"] div,
-        li[data-baseweb="option"] span {
-             color: #333333 !important;
+        /* 例外：被選中(Selected)或滑鼠滑過(Hover)的項目 */
+        /* 我們需要用更強的權重把背景改回紅色 */
+        div[data-baseweb="popover"] li[aria-selected="true"],
+        div[data-baseweb="popover"] li:hover {
+            background-color: #E67F75 !important;
         }
         
-        /* 選中狀態 */
-        li[data-baseweb="option"][aria-selected="true"] {
-            background-color: #E67F75 !important;
+        /* 選中項目的文字改為白色 */
+        div[data-baseweb="popover"] li[aria-selected="true"] *,
+        div[data-baseweb="popover"] li:hover * {
+            background-color: #E67F75 !important; /* 確保子元素背景也變紅 */
             color: #FFFFFF !important;
-        }
-        li[data-baseweb="option"][aria-selected="true"] div,
-        li[data-baseweb="option"][aria-selected="true"] span {
-             color: #FFFFFF !important;
-             -webkit-text-fill-color: #FFFFFF !important;
+            -webkit-text-fill-color: #FFFFFF !important;
         }
 
-        /* 5. 其他元件修復 */
+        /* 5. Radio & Expander & Slider 修復 */
         div[data-baseweb="radio"] div { color: #333333 !important; }
         div[role="radiogroup"] label { color: #333333 !important; }
         .streamlit-expanderHeader {
             background-color: #FFFFFF;
-            border: 1px solid #E0E0E0;
             color: #333333 !important;
+            border: 1px solid #E0E0E0;
         }
         .streamlit-expanderHeader p { color: #222222 !important; }
         .streamlit-expanderContent { background-color: #F9F9F7; color: #333333 !important; }
