@@ -16,7 +16,7 @@ st.set_page_config(
     page_icon="📈"
 )
 
-# --- CSS 全域美化 (無差別強制覆寫版) ---
+# --- CSS 全域美化 ---
 custom_css = """
     <style>
         /* 0. 瀏覽器層級強制亮色 */
@@ -62,31 +62,23 @@ custom_css = """
             font-weight: 500 !important;
         }
         
-        /* 4. 【核彈級修復】下拉選單浮動視窗 (Popover) */
-        /* 使用通用選擇器 * 強制覆寫視窗內「所有」層級的顏色 */
-        
+        /* 4. 下拉選單浮動視窗 (Popover) 強制修復 */
         div[data-baseweb="popover"] {
             background-color: #FFFFFF !important;
             border: 1px solid #E0E0E0 !important;
         }
-        
-        /* 視窗內的所有子元素：背景全白、文字全黑 */
         div[data-baseweb="popover"] * {
             background-color: #FFFFFF !important;
             color: #333333 !important;
         }
-        
-        /* 例外：被選中(Selected)或滑鼠滑過(Hover)的項目 */
-        /* 我們需要用更強的權重把背景改回紅色 */
+        /* 選中/滑過樣式 */
         div[data-baseweb="popover"] li[aria-selected="true"],
         div[data-baseweb="popover"] li:hover {
             background-color: #E67F75 !important;
         }
-        
-        /* 選中項目的文字改為白色 */
         div[data-baseweb="popover"] li[aria-selected="true"] *,
         div[data-baseweb="popover"] li:hover * {
-            background-color: #E67F75 !important; /* 確保子元素背景也變紅 */
+            background-color: #E67F75 !important;
             color: #FFFFFF !important;
             -webkit-text-fill-color: #FFFFFF !important;
         }
@@ -177,13 +169,14 @@ with st.expander("🔍 點擊設定篩選條件 (方向、天數、金額)", exp
     f_col1, f_col2 = st.columns(2)
     
     with f_col1:
-        filter_side = st.radio("尋找方向", ["買超 (主力進)", "賣超 (主力出)"], horizontal=True)
+        # 標籤明確化：說明這是「淨買超/淨賣超」
+        filter_side = st.radio("尋找方向 (淨流量)", ["買超 (主力囤貨)", "賣超 (主力出貨)"], horizontal=True)
         is_buy = True if "買超" in filter_side else False
-        min_appear_days = st.slider("至少出現天數", 1, 20, 1)
+        min_appear_days = st.slider("至少出現天數 (該方向)", 1, 20, 1)
 
     with f_col2:
         filter_days_option = st.selectbox("時間範圍", ["近 3 天", "近 5 天", "近 10 天", "近 20 天", "自訂"])
-        amount_threshold = st.number_input("累計金額大於(千)", value=1000, step=500)
+        amount_threshold = st.number_input("累計淨金額大於(千)", value=1000, step=500)
 
     end_date = max_db_date
     if filter_days_option == "自訂":
@@ -196,26 +189,45 @@ with st.expander("🔍 點擊設定篩選條件 (方向、天數、金額)", exp
     
     selected_days_count = (end_date - start_date).days
 
-# --- 5. 資料篩選邏輯 ---
+# --- 5. 資料篩選邏輯 (核心修改區) ---
+# 5.1 先篩選出日期範圍內的所有資料 (不做方向預篩)
 mask_date = (df_raw["日期"].dt.date >= start_date) & (df_raw["日期"].dt.date <= end_date)
 df_period = df_raw.loc[mask_date].copy()
 
-if is_buy:
-    df_direction = df_period[df_period["買賣超金額(千)"] > 0].copy()
-else:
-    df_direction = df_period[df_period["買賣超金額(千)"] < 0].copy()
+# 5.2 輔助計算：標記每一天是買超還是賣超
+df_period["is_buy_day"] = df_period["估算張數"] > 0
+df_period["is_sell_day"] = df_period["估算張數"] < 0
 
-stats = df_direction.groupby(["代號", "名稱"]).agg(
-    出現天數=("日期", "count"),
-    累計金額=("買賣超金額(千)", "sum")
+# 5.3 依據股票代號進行加總 (Total Sum)
+stats = df_period.groupby(["代號", "名稱"]).agg(
+    累計金額=("買賣超金額(千)", "sum"), # 這裡會正負相抵
+    累計張數=("估算張數", "sum"),       # 這裡會買賣張數相抵 (淨張數)
+    買超天數=("is_buy_day", "sum"),     # 統計有幾天是紅棒
+    賣超天數=("is_sell_day", "sum")     # 統計有幾天是綠棒
 ).reset_index()
 
-if not is_buy: stats["累計金額"] = stats["累計金額"].abs()
+# 5.4 依據使用者選擇的方向進行過濾
+if is_buy:
+    # 邏輯 A: 尋找淨買超 (總張數 > 0)
+    final_list = stats[stats["累計張數"] > 0].copy()
+    # 天數邏輯: 該區間內「買超(紅棒)」的天數符合門檻
+    final_list = final_list[final_list["買超天數"] >= min_appear_days]
+    # 顯示用的天數欄位
+    final_list["顯示天數"] = final_list["買超天數"]
+else:
+    # 邏輯 B: 尋找淨賣超 (總張數 < 0)
+    final_list = stats[stats["累計張數"] < 0].copy()
+    # 天數邏輯: 該區間內「賣超(綠棒)」的天數符合門檻
+    final_list = final_list[final_list["賣超天數"] >= min_appear_days]
+    # 顯示用的天數欄位
+    final_list["顯示天數"] = final_list["賣超天數"]
 
-final_list = stats[
-    (stats["出現天數"] >= min_appear_days) & 
-    (stats["累計金額"] >= amount_threshold)
-].sort_values(by="累計金額", ascending=False)
+# 5.5 金額門檻篩選 (取絕對值比較，因為賣超金額是負的)
+final_list = final_list[final_list["累計金額"].abs() >= amount_threshold]
+
+# 5.6 排序 (依據金額絕對值由大到小)
+final_list["金額絕對值"] = final_list["累計金額"].abs()
+final_list = final_list.sort_values(by="金額絕對值", ascending=False)
 
 # --- 6. 介面呈現 (Tabs) ---
 tab1, tab2 = st.tabs(["📋 選股清單", "📊 個股分析"])
@@ -231,8 +243,13 @@ with tab1:
         st.info("💡 無符合條件股票，請點擊上方「🔍」放寬條件。")
     else:
         st.markdown(f"**共 {len(final_list)} 檔** (點擊查看)")
+        
+        # 整理顯示用的表格 (為了美觀，不顯示所有運算欄位)
+        display_df = final_list[["代號", "名稱", "顯示天數", "累計金額"]].copy()
+        display_df.columns = ["代號", "名稱", "出現天數", "淨買賣超(千)"] # 欄位重新命名以符合新邏輯
+        
         event = st.dataframe(
-            final_list, 
+            display_df, 
             on_select="rerun", 
             selection_mode="single-row", 
             use_container_width=True, 
@@ -240,7 +257,7 @@ with tab1:
             height=400
         )
         if len(event.selection.rows) > 0:
-            row = final_list.iloc[event.selection.rows[0]]
+            row = display_df.iloc[event.selection.rows[0]]
             st.session_state.selected_stock_id = row["代號"]
             st.session_state.selected_stock_name = row["名稱"]
             st.toast(f"已選擇：{row['名稱']}，請切換分頁", icon="👉")
@@ -276,7 +293,7 @@ with tab2:
             avg_cost = round(total_amt / total_sheets, 2) if total_sheets != 0 else 0
             
             col_m1, col_m2, col_m3 = st.columns(3)
-            with col_m1: st.metric("區間累積", f"{int(total_sheets)} 張")
+            with col_m1: st.metric("區間淨張數", f"{int(total_sheets)} 張")
             with col_m2:
                 delta_color = "off"
                 if avg_cost > 0:
