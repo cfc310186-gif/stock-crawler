@@ -16,10 +16,10 @@ st.set_page_config(
     page_icon="📈"
 )
 
-# --- CSS 全域美化 (針對截圖問題的專項修復) ---
+# --- CSS 全域美化 (針對下拉選單浮窗的核彈級修復) ---
 custom_css = """
     <style>
-        /* 0. 根變數覆寫 */
+        /* 0. 基礎設定 */
         :root {
             --primaryColor: #E67F75;
             --backgroundColor: #F9F9F7;
@@ -33,50 +33,21 @@ custom_css = """
             background-color: #F9F9F7;
         }
         
-        /* 2. 【修復標題換行】縮小字體以適配手機寬度 */
+        /* 2. 標題與一般文字強制深色 */
         h1 {
             color: #333333 !important;
             font-family: 'Helvetica Neue', 'PingFang TC', 'Microsoft JhengHei', sans-serif;
             font-weight: 600 !important;
-            font-size: 1.25rem !important; /* 縮小字體 (原本 1.5rem) */
-            white-space: nowrap !important; /* 強制不換行 */
+            font-size: 1.25rem !important; /* 維持縮小字體 */
+            white-space: nowrap !important;
             padding-top: 10px !important;
             padding-bottom: 5px !important;
-            letter-spacing: -0.5px; /* 稍微縮減字距 */
         }
-        
-        /* 一般文字強制深色 */
         h2, h3, p, div, span, label {
             color: #333333 !important;
         }
         
-        /* 3. Radio 按鈕修復 */
-        div[data-baseweb="radio"] div {
-            color: #333333 !important;
-            font-weight: 500 !important;
-        }
-        div[role="radiogroup"] label {
-            color: #333333 !important;
-        }
-
-        /* 4. Expander 樣式 */
-        .streamlit-expanderHeader {
-            background-color: #FFFFFF;
-            border: 1px solid #E0E0E0;
-            border-radius: 8px;
-            color: #333333 !important;
-        }
-        .streamlit-expanderHeader p {
-            font-weight: 600;
-            font-size: 15px;
-            color: #222222 !important;
-        }
-        .streamlit-expanderContent {
-            background-color: #F9F9F7;
-            color: #333333 !important;
-        }
-
-        /* 5. 輸入框 (Input/Select) 樣式 - 白底黑字 */
+        /* 3. 輸入框 (Input/Select) 初始狀態 - 白底黑字 */
         div[data-baseweb="select"] > div, 
         div[data-baseweb="input"] > div {
             background-color: #FFFFFF !important;
@@ -90,69 +61,70 @@ custom_css = """
             font-weight: 500 !important;
         }
         
-        /* 6. 【下拉選單浮動視窗 (Popover) 核彈級修正】 */
+        /* 4. 【關鍵修復】下拉選單彈出層 (Options Menu) */
+        /* 這段代碼專門針對截圖中那個黑色的選單方塊 */
         
-        /* 針對浮動視窗的最外層容器，強制背景為白 */
-        div[data-baseweb="popover"] > div {
-            background-color: #FFFFFF !important;
-            border: 1px solid #eee !important;
-        }
-
-        /* 選單列表容器 */
+        /* 清單容器：強制白底 */
         ul[data-baseweb="menu"] {
             background-color: #FFFFFF !important;
+            border: 1px solid #E0E0E0 !important;
         }
         
-        /* 選項本身：白底黑字 */
+        /* 每一個選項：強制白底黑字 */
         li[data-baseweb="option"] {
             background-color: #FFFFFF !important;
             color: #333333 !important;
-            opacity: 1 !important; /* 防止被系統變透明 */
+            opacity: 1 !important;
         }
         
         /* 選項內的文字容器 */
-        li[data-baseweb="option"] div {
+        li[data-baseweb="option"] div, 
+        li[data-baseweb="option"] span {
              color: #333333 !important;
         }
         
-        /* 滑鼠滑過或選中狀態：紅色背景，白色文字 */
+        /* 滑鼠滑過 或 被選中 的狀態：紅底白字 (增加對比) */
         li[data-baseweb="option"][aria-selected="true"],
         li[data-baseweb="option"]:hover {
             background-color: #E67F75 !important;
             color: #FFFFFF !important;
         }
         
-        /* 選中時，內部的文字也要變白 */
+        /* 選中狀態下的文字顏色轉為白色 */
         li[data-baseweb="option"][aria-selected="true"] div,
-        li[data-baseweb="option"]:hover div {
+        li[data-baseweb="option"]:hover div,
+        li[data-baseweb="option"][aria-selected="true"] span,
+        li[data-baseweb="option"]:hover span {
              color: #FFFFFF !important;
              -webkit-text-fill-color: #FFFFFF !important;
         }
 
-
-        /* 7. Slider 滑桿 */
-        div[data-baseweb="slider"] div[role="slider"] {
+        /* 5. Radio & Expander & Slider 修復 */
+        div[data-baseweb="radio"] div { color: #333333 !important; }
+        div[role="radiogroup"] label { color: #333333 !important; }
+        .streamlit-expanderHeader {
+            background-color: #FFFFFF;
             color: #333333 !important;
+            border: 1px solid #E0E0E0;
         }
+        .streamlit-expanderHeader p { color: #222222 !important; }
+        .streamlit-expanderContent { background-color: #F9F9F7; color: #333333 !important; }
+        div[data-baseweb="slider"] div[role="slider"] { color: #333333 !important; }
         
-        /* 8. 分頁籤優化 */
+        /* 6. 分頁籤優化 */
         .stTabs [data-baseweb="tab-list"] { gap: 8px; }
         .stTabs [data-baseweb="tab"] {
-            height: 40px;
             background-color: #EFEFEF;
-            border-radius: 5px;
             color: #555555 !important;
-            font-weight: 500;
         }
         .stTabs [aria-selected="true"] {
             background-color: #FFFFFF;
             color: #E67F75 !important;
-            font-weight: bold;
         }
         
-        /* 9. Metric 指標 */
-        [data-testid="stMetricLabel"] { font-size: 14px !important; color: #444444 !important; }
-        [data-testid="stMetricValue"] { font-size: 20px !important; color: #222222 !important; }
+        /* 7. Metric 指標 */
+        [data-testid="stMetricLabel"] { color: #444444 !important; }
+        [data-testid="stMetricValue"] { color: #222222 !important; }
         
         /* 隱藏 footer */
         #MainMenu {visibility: hidden;}
@@ -213,7 +185,6 @@ with st.expander("🔍 點擊設定篩選條件 (方向、天數、金額)", exp
     f_col1, f_col2 = st.columns(2)
     
     with f_col1:
-        # 修復文字顏色
         filter_side = st.radio("尋找方向", ["買超 (主力進)", "賣超 (主力出)"], horizontal=True)
         is_buy = True if "買超" in filter_side else False
         min_appear_days = st.slider("至少出現天數", 1, 20, 1)
