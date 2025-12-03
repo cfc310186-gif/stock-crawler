@@ -16,7 +16,7 @@ st.set_page_config(
     page_icon="📈"
 )
 
-# --- CSS 全域美化 (修正按鈕消失問題) ---
+# --- CSS 全域美化 (修正深色模式文字消失問題) ---
 custom_css = """
     <style>
         /* 1. 背景色 */
@@ -39,11 +39,11 @@ custom_css = """
         .streamlit-expanderHeader {
             background-color: #FFFFFF;
             border-radius: 5px;
-            color: #4A4A4A;
+            color: #4A4A4A !important; /* 強制標題深色 */
             font-weight: 500;
         }
         
-        /* 4. 隱藏 footer 但保留 header (避免按鈕消失) */
+        /* 4. 隱藏 footer 但保留 header */
         #MainMenu {visibility: hidden;}
         footer {visibility: hidden;}
         
@@ -61,13 +61,35 @@ custom_css = """
         }
         .stTabs [aria-selected="true"] {
             background-color: #FFFFFF;
-            color: #E67F75; /* 文青紅 */
+            color: #E67F75;
             box-shadow: 0px 2px 5px rgba(0,0,0,0.05);
         }
         
         /* 6. 指標優化 */
         [data-testid="stMetricLabel"] { font-size: 13px !important; color: #888 !important; }
         [data-testid="stMetricValue"] { font-size: 18px !important; color: #333 !important; }
+
+        /* --- 7. (新) 強制修正深色模式下的文字顏色 --- */
+        /* 這段代碼會強制所有標籤文字變成深灰，避免在手機暗模式下變成白色 */
+        
+        /* 一般文字與 Markdown */
+        .stMarkdown, .stMarkdown p {
+            color: #4A4A4A !important;
+        }
+        
+        /* Widget 的標題 Label (如：尋找方向、時間範圍...) */
+        .stRadio label, .stSelectbox label, .stSlider label, .stNumberInput label, .stDateInput label {
+            color: #4A4A4A !important;
+        }
+        
+        /* Radio 按鈕選項的文字 */
+        div[role="radiogroup"] label div p {
+            color: #4A4A4A !important;
+        }
+        
+        /* 讓 Input 輸入框在暗模式下保持可讀 (白字黑底或適應) */
+        /* 這裡不強制改 Input 內部，讓它隨系統變換，確保對比度 */
+        
     </style>
 """
 st.markdown(custom_css, unsafe_allow_html=True)
@@ -119,12 +141,12 @@ except Exception as e:
     st.error(f"連線錯誤: {e}")
     st.stop()
 
-# --- 4. 篩選條件 (改為 Expander 下拉選單) ---
-# 預設 expanded=True (展開)，方便使用者第一次進來看到
-with st.expander("🔍 點擊設定篩選條件 (方向、天數、金額)", expanded=False):
+# --- 4. 篩選條件 (Expander) ---
+with st.expander("🔍 點擊設定篩選條件 (方向、天數、金額)", expanded=True):
     f_col1, f_col2 = st.columns(2)
     
     with f_col1:
+        # 這裡的 Label 已經被 CSS 強制改為深色
         filter_side = st.radio("尋找方向", ["買超 (主力進)", "賣超 (主力出)"], horizontal=True)
         is_buy = True if "買超" in filter_side else False
         
@@ -144,7 +166,6 @@ with st.expander("🔍 點擊設定篩選條件 (方向、天數、金額)", exp
         days_back = int(filter_days_option.split(" ")[1])
         start_date = end_date - timedelta(days=days_back)
     
-    # 計算篩選天數
     selected_days_count = (end_date - start_date).days
 
 # --- 5. 資料篩選邏輯 ---
@@ -204,7 +225,7 @@ with tab2:
     if stock_id:
         st.markdown(f"### {stock_name} <span style='font-size:16px;color:#888'>({stock_id})</span>", unsafe_allow_html=True)
         
-        # A. 圖表時間軸邏輯
+        # 圖表邏輯
         if selected_days_count < 30:
             chart_start_date = end_date - timedelta(days=29)
         else:
@@ -218,7 +239,6 @@ with tab2:
         if df_chart.empty:
             st.info("此區間無資料")
         else:
-            # B. 統計
             mask_stat = (df_raw["代號"] == stock_id) & \
                         (df_raw["日期"].dt.date >= start_date) & \
                         (df_raw["日期"].dt.date <= end_date)
@@ -229,7 +249,6 @@ with tab2:
             current_price = df_chart.iloc[-1]['收盤價']
             avg_cost = round(total_amt / total_sheets, 2) if total_sheets != 0 else 0
             
-            # C. 指標
             col_m1, col_m2, col_m3 = st.columns(3)
             with col_m1: st.metric("區間累積", f"{int(total_sheets)} 張")
             with col_m2:
@@ -241,7 +260,7 @@ with tab2:
                 st.metric("平均成本", f"{avg_cost}", delta=round(current_price-avg_cost, 1), delta_color=delta_color)
             with col_m3: st.metric("收盤價", f"{current_price}")
 
-            # D. 繪圖
+            # 繪圖
             df_chart["累積張數"] = df_chart["估算張數"].cumsum()
             df_chart["顏色"] = df_chart["估算張數"].apply(lambda x: "#E67F75" if x > 0 else "#6CB097")
 
