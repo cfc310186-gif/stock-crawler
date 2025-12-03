@@ -34,6 +34,8 @@ if (not LINE_ACCESS_TOKEN or not LINE_USER_ID) and os.path.exists(LINE_SECRET_FI
 # --- 🎯 監控名單與分類 ---
 WATCHLIST = {
     # 🚀 AI 與高速傳輸
+    '3450': {'name': '聯鈞', 'category': '🚀 AI/高速傳輸'}, # [新增] CPO/矽光子指標
+    '3689': {'name': '湧德', 'category': '🚀 AI/高速傳輸'},
     '3533': {'name': '嘉澤', 'category': '🚀 AI/高速傳輸'},
     '3665': {'name': '貿聯-KY', 'category': '🚀 AI/高速傳輸'},
     '3605': {'name': '宏致', 'category': '🚀 AI/高速傳輸'},
@@ -60,6 +62,7 @@ WATCHLIST = {
     '3511': {'name': '矽瑪', 'category': '💻 消費電子'},
 
     # ⚙️ 上游材料
+    '6274': {'name': '台燿', 'category': '⚙️ 上游材料'},
     '2009': {'name': '第一銅', 'category': '⚙️ 上游材料'},
     '2476': {'name': '鉅祥', 'category': '⚙️ 上游材料'},
     '1617': {'name': '榮星', 'category': '⚙️ 上游材料'}
@@ -153,7 +156,7 @@ def send_line_notify():
         # 股名 + 代號 + 趨勢燈號
         message += f"{h['trend']} {h['name']} ({h['id']})\n"
         
-        # 【新增】獨立一行顯示張數 (加強視覺)
+        # 獨立一行顯示張數
         message += f"📊 張數: {sheet_str} 張\n"
         
         # 金額
