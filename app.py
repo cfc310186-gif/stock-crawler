@@ -16,116 +16,98 @@ st.set_page_config(
     page_icon="📈"
 )
 
-# --- CSS 全域美化 (核彈級修正：強制亮色主題變數) ---
+# --- CSS 全域美化 (針對截圖問題的專項修復) ---
 custom_css = """
     <style>
-        /* 0. 【核彈級修正】強制覆寫 Streamlit 的根變數 
-           這會強制將 App 的基礎配色鎖定為「亮色模式」，徹底解決深色模式字體變白的問題
-        */
+        /* 0. 根變數覆寫 (基底) */
         :root {
             --primaryColor: #E67F75;
             --backgroundColor: #F9F9F7;
             --secondaryBackgroundColor: #FFFFFF;
-            --textColor: #333333; /* 強制所有文字為深色 */
+            --textColor: #333333;
             --font: "sans-serif";
         }
-
+    
         /* 1. 背景色 */
         .stApp {
             background-color: #F9F9F7;
         }
         
-        /* 2. 標題優化 */
-        h1 {
+        /* 2. 標題與一般文字強制深色 */
+        h1, h2, h3, p, div, span, label {
             color: #333333 !important;
             font-family: 'Helvetica Neue', 'PingFang TC', 'Microsoft JhengHei', sans-serif;
-            font-weight: 600 !important;
-            font-size: 1.5rem !important;
-            white-space: nowrap !important;
-            padding-top: 10px !important;
-            padding-bottom: 10px !important;
         }
         
-        /* 3. Expander (篩選區塊) 優化 */
+        /* 3. 【修復】Radio 按鈕旁的文字消失問題 */
+        /* 強制所有 Radio 選項的文字容器變黑 */
+        div[data-baseweb="radio"] div {
+            color: #333333 !important;
+            font-weight: 500 !important;
+        }
+        /* 針對 Radio Group 的標籤 */
+        div[role="radiogroup"] label {
+            color: #333333 !important;
+        }
+
+        /* 4. Expander (篩選區塊) 標題清楚化 */
         .streamlit-expanderHeader {
             background-color: #FFFFFF;
             border: 1px solid #E0E0E0;
             border-radius: 8px;
-            color: #333333 !important;
+            color: #333333 !important; /* 強制深黑 */
         }
         .streamlit-expanderHeader p {
             font-weight: 600;
             font-size: 15px;
+            color: #222222 !important; /* 加深標題顏色 */
+        }
+        .streamlit-expanderContent {
+            background-color: #F9F9F7;
             color: #333333 !important;
         }
 
-        /* 4. 【輸入框終極修正】強制白底黑字 + iOS 修正 */
+        /* 5. 輸入框 (Input/Select) 樣式 - 白底黑字 */
         div[data-baseweb="select"] > div, 
         div[data-baseweb="input"] > div {
             background-color: #FFFFFF !important;
             border-color: #CCCCCC !important;
             color: #333333 !important;
         }
-        
-        /* 強制輸入框內的文字顏色 (包含 iOS Safari) */
         input, .stSelectbox span, .stNumberInput input {
             color: #333333 !important;
-            -webkit-text-fill-color: #333333 !important; /* iOS 專用 */
+            -webkit-text-fill-color: #333333 !important;
             caret-color: #333333 !important;
             font-weight: 500 !important;
         }
         
-        /* 5. Radio Button (買超/賣超) 文字修正 */
-        div[role="radiogroup"] label p {
-            color: #333333 !important;
-            font-weight: 500 !important;
-        }
-        /* Radio 的選取圓點顏色 */
-        div[role="radiogroup"] div[data-baseweb="radio"] {
+        /* 6. Slider 滑桿數值 */
+        div[data-baseweb="slider"] div[role="slider"] {
             color: #333333 !important;
         }
         
-        /* 6. Slider (滑桿) 文字修正 */
-        div[data-baseweb="slider"] p {
-             color: #333333 !important;
-        }
-        
-        /* 7. 下拉選單彈出的列表 (Options) */
-        ul[data-baseweb="menu"] {
-            background-color: #FFFFFF !important;
-        }
-        li[data-baseweb="option"] {
-            color: #333333 !important;
-        }
-        
-        /* 8. 分頁籤優化 */
-        .stTabs [data-baseweb="tab-list"] {
-            gap: 8px;
-        }
+        /* 7. 分頁籤優化 */
+        .stTabs [data-baseweb="tab-list"] { gap: 8px; }
         .stTabs [data-baseweb="tab"] {
             height: 40px;
             background-color: #EFEFEF;
             border-radius: 5px;
-            color: #555555;
-            font-size: 14px;
+            color: #555555 !important;
             font-weight: 500;
-            padding: 0px 16px;
         }
         .stTabs [aria-selected="true"] {
             background-color: #FFFFFF;
-            color: #E67F75;
-            box-shadow: 0px 2px 5px rgba(0,0,0,0.05);
+            color: #E67F75 !important;
             font-weight: bold;
         }
         
-        /* 9. 指標 (Metric) */
+        /* 8. Metric 指標顏色 */
         [data-testid="stMetricLabel"] { font-size: 14px !important; color: #444444 !important; }
         [data-testid="stMetricValue"] { font-size: 20px !important; color: #222222 !important; }
         
         /* 隱藏 footer */
         #MainMenu {visibility: hidden;}
         footer {visibility: hidden;}
-
     </style>
 """
 st.markdown(custom_css, unsafe_allow_html=True)
@@ -182,7 +164,7 @@ with st.expander("🔍 點擊設定篩選條件 (方向、天數、金額)", exp
     f_col1, f_col2 = st.columns(2)
     
     with f_col1:
-        # 選單標題已經被 CSS 強制變深
+        # 修復文字顏色
         filter_side = st.radio("尋找方向", ["買超 (主力進)", "賣超 (主力出)"], horizontal=True)
         is_buy = True if "買超" in filter_side else False
         min_appear_days = st.slider("至少出現天數", 1, 20, 1)
@@ -300,17 +282,25 @@ with tab2:
             fig.add_trace(go.Bar(x=df_chart["日期"], y=df_chart["估算張數"], name="每日", marker_color=df_chart["顏色"], opacity=0.8), secondary_y=False)
             fig.add_trace(go.Scatter(x=df_chart["日期"], y=df_chart["累積張數"], name="庫存", line=dict(color='#2C3E50', width=2), mode='lines'), secondary_y=True)
 
-            # 【修正 undefined】 確保 title_text 被正確設定
+            # 【關鍵修復】圖表字體顏色強制深色 (解決圖七座標軸看不清問題)
             fig.update_layout(
-                title_text="籌碼分佈趨勢", # 直接使用 title_text 參數，避免 undefined
+                title=dict(text="籌碼分佈趨勢", font=dict(color='#333333', size=16)),
                 plot_bgcolor='#FFFFFF',
                 paper_bgcolor='#FFFFFF',
-                font=dict(color='#333333'), # 強制圖表深色字體
+                font=dict(color='#333333'), # 全域圖表字體設為深灰
                 legend=dict(orientation="h", y=1.1, x=0, font=dict(color='#333333')),
                 height=350,
                 margin=dict(l=15, r=15, t=50, b=10),
-                xaxis=dict(showgrid=False, tickfont=dict(color='#555555'), title_font=dict(color='#333333')),
-                yaxis=dict(showgrid=True, gridcolor="#F0F0F0", tickfont=dict(color='#555555'))
+                xaxis=dict(
+                    showgrid=False, 
+                    tickfont=dict(color='#333333', size=12), # 座標軸文字改為深色
+                    title_font=dict(color='#333333')
+                ),
+                yaxis=dict(
+                    showgrid=True, 
+                    gridcolor="#F0F0F0", 
+                    tickfont=dict(color='#333333', size=12) # Y軸文字改為深色
+                )
             )
             
             st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False, 'staticPlot': False, 'scrollZoom': False})
