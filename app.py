@@ -16,9 +16,20 @@ st.set_page_config(
     page_icon="📈"
 )
 
-# --- CSS 全域美化 (終極修正：強制輸入框白底黑字) ---
+# --- CSS 全域美化 (終極修復：強制鎖定亮色主題配色) ---
 custom_css = """
     <style>
+        /* 0. 強制覆寫 Streamlit 預設變數 (關鍵！) 
+           這會告訴瀏覽器：不管系統是不是深色模式，這裡所有的預設文字都要是深色的
+        */
+        :root {
+            --primaryColor: #E67F75;
+            --backgroundColor: #F9F9F7;
+            --secondaryBackgroundColor: #EFEFEF;
+            --textColor: #333333; /* 強制內文深黑 */
+            --font: "sans-serif";
+        }
+    
         /* 1. 背景色 */
         .stApp {
             background-color: #F9F9F7;
@@ -45,24 +56,43 @@ custom_css = """
         .streamlit-expanderHeader p {
             font-weight: 600;
             font-size: 15px;
+            color: #333333 !important;
         }
 
-        /* 4. 【關鍵修正】強制所有輸入框 (Input/Select) 變為白底黑字 */
-        /* 下拉選單 (Selectbox) 與 數字輸入 (NumberInput) 的外框 */
+        /* 4. 【輸入框終極修正】強制白底黑字，修復手機深色模式反白問題 */
+        
+        /* 下拉選單 (Selectbox) 與 數字輸入 (NumberInput) 的容器 */
         div[data-baseweb="select"] > div, 
         div[data-baseweb="input"] > div {
-            background-color: #FFFFFF !important; /* 強制白底 */
-            color: #333333 !important;            /* 強制黑字 */
-            border-color: #CCCCCC !important;     /* 加上邊框 */
-        }
-        
-        /* 輸入框內的文字顏色 */
-        div[data-baseweb="select"] span, 
-        div[data-baseweb="input"] input {
+            background-color: #FFFFFF !important;
+            border-color: #CCCCCC !important;
             color: #333333 !important;
         }
         
-        /* 下拉選單彈出的列表 (Options) */
+        /* 輸入框內的文字 - 針對 iOS Safari 的特殊修正 */
+        div[data-baseweb="select"] span, 
+        div[data-baseweb="input"] input {
+            color: #333333 !important;
+            -webkit-text-fill-color: #333333 !important; /* iOS 強制填色 */
+            caret-color: #333333 !important; /* 游標顏色 */
+            font-weight: 500 !important;
+        }
+        
+        /* 5. Radio Button (買超/賣超) 文字修正 */
+        div[role="radiogroup"] label {
+            color: #333333 !important;
+        }
+        div[role="radiogroup"] label p {
+            color: #333333 !important;
+            font-weight: 500 !important;
+        }
+        
+        /* 6. Slider (滑桿) 文字修正 */
+        div[data-baseweb="slider"] p {
+             color: #333333 !important;
+        }
+        
+        /* 7. 下拉選單彈出的列表 (Options) */
         ul[data-baseweb="menu"] {
             background-color: #FFFFFF !important;
         }
@@ -70,7 +100,7 @@ custom_css = """
             color: #333333 !important;
         }
         
-        /* 5. 分頁籤優化 */
+        /* 8. 分頁籤優化 */
         .stTabs [data-baseweb="tab-list"] {
             gap: 8px;
         }
@@ -90,14 +120,9 @@ custom_css = """
             font-weight: bold;
         }
         
-        /* 6. 指標 (Metric) 顏色修正 */
-        [data-testid="stMetricLabel"] { font-size: 14px !important; color: #444444 !important; font-weight: 500; }
-        [data-testid="stMetricValue"] { font-size: 20px !important; color: #222222 !important; font-weight: 600; }
-        
-        /* 7. 全域標籤強制深色 */
-        .stMarkdown, .stMarkdown p, .stText, h2, h3, label, .stSlider p {
-            color: #333333 !important;
-        }
+        /* 9. 指標 (Metric) */
+        [data-testid="stMetricLabel"] { font-size: 14px !important; color: #444444 !important; }
+        [data-testid="stMetricValue"] { font-size: 20px !important; color: #222222 !important; }
         
         /* 隱藏 footer */
         #MainMenu {visibility: hidden;}
@@ -159,6 +184,7 @@ with st.expander("🔍 點擊設定篩選條件 (方向、天數、金額)", exp
     f_col1, f_col2 = st.columns(2)
     
     with f_col1:
+        # 選單標題已經被 CSS 強制變深
         filter_side = st.radio("尋找方向", ["買超 (主力進)", "賣超 (主力出)"], horizontal=True)
         is_buy = True if "買超" in filter_side else False
         min_appear_days = st.slider("至少出現天數", 1, 20, 1)
@@ -287,6 +313,7 @@ with tab2:
                 xaxis=dict(showgrid=False, tickfont=dict(color='#555555'), title_font=dict(color='#333333')),
                 yaxis=dict(showgrid=True, gridcolor="#F0F0F0", tickfont=dict(color='#555555'))
             )
+            
             st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False, 'staticPlot': False, 'scrollZoom': False})
             
             with st.expander("📄 詳細數據"):
