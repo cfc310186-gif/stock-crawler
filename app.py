@@ -16,17 +16,14 @@ st.set_page_config(
     page_icon="📈"
 )
 
-# --- CSS 全域美化 (下拉選單終極修復版) ---
+# --- CSS 全域美化 (下拉選單浮動視窗終極修復) ---
 custom_css = """
     <style>
-        /* 0. 【核心變數覆寫】 
-           這行非常關鍵，它告訴 Streamlit：「所有的次要背景（包含下拉選單）」都要是白色的！
-           不論手機是不是深色模式，這行會強制生效。
-        */
+        /* 0. 根變數覆寫 */
         :root {
             --primaryColor: #E67F75;
             --backgroundColor: #F9F9F7;
-            --secondaryBackgroundColor: #FFFFFF; /* 下拉選單背景色 */
+            --secondaryBackgroundColor: #FFFFFF;
             --textColor: #333333;
             --font: "sans-serif";
         }
@@ -42,7 +39,7 @@ custom_css = """
             font-family: 'Helvetica Neue', 'PingFang TC', 'Microsoft JhengHei', sans-serif;
         }
         
-        /* 3. Radio 按鈕旁的文字修復 */
+        /* 3. Radio 按鈕修復 */
         div[data-baseweb="radio"] div {
             color: #333333 !important;
             font-weight: 500 !important;
@@ -51,7 +48,7 @@ custom_css = """
             color: #333333 !important;
         }
 
-        /* 4. Expander 標題 */
+        /* 4. Expander 樣式 */
         .streamlit-expanderHeader {
             background-color: #FFFFFF;
             border: 1px solid #E0E0E0;
@@ -82,37 +79,45 @@ custom_css = """
             font-weight: 500 !important;
         }
         
-        /* 6. 【下拉選單彈出層 (Popover) 暴力修正】 */
+        /* 6. 【下拉選單浮動視窗 (Popover) 核彈級修正】 
+           這裡針對的是點開選單後跳出來的那一塊浮動視窗
+        */
         
-        /* 強制選單列表的背景為純白 */
+        /* 強制浮動視窗容器背景為白 */
+        div[data-baseweb="popover"] {
+            background-color: #FFFFFF !important;
+        }
+        
+        /* 強制浮動視窗內的所有子容器背景為白 */
+        div[data-baseweb="popover"] > div {
+            background-color: #FFFFFF !important;
+        }
+
+        /* 選單列表 */
         ul[data-baseweb="menu"] {
             background-color: #FFFFFF !important;
         }
         
-        /* 強制每一個選項的背景為純白，文字為深黑 */
+        /* 選項本身 */
         li[data-baseweb="option"] {
             background-color: #FFFFFF !important;
             color: #333333 !important;
         }
         
-        /* 確保選項內的文字容器也是深黑 */
+        /* 選項文字 */
         li[data-baseweb="option"] div {
              color: #333333 !important;
         }
         
-        /* 滑鼠滑過 (Hover) 或選中時的樣式 */
-        li[data-baseweb="option"]:hover,
+        /* 選中或滑鼠滑過的狀態 */
         li[data-baseweb="option"][aria-selected="true"] {
-            background-color: #F0F0F0 !important; /* 淺灰背景 */
+            background-color: #E67F75 !important; /* 紅色背景 */
+            color: #FFFFFF !important;             /* 白色文字 */
+        }
+        li[data-baseweb="option"][aria-selected="true"] div {
+            color: #FFFFFF !important;
         }
         
-        /* 選中時，文字變紅 */
-        li[data-baseweb="option"][aria-selected="true"] div {
-             color: #E67F75 !important;
-             font-weight: bold !important;
-        }
-
-
         /* 7. Slider 滑桿 */
         div[data-baseweb="slider"] div[role="slider"] {
             color: #333333 !important;
@@ -196,7 +201,6 @@ with st.expander("🔍 點擊設定篩選條件 (方向、天數、金額)", exp
     f_col1, f_col2 = st.columns(2)
     
     with f_col1:
-        # 修復文字顏色
         filter_side = st.radio("尋找方向", ["買超 (主力進)", "賣超 (主力出)"], horizontal=True)
         is_buy = True if "買超" in filter_side else False
         min_appear_days = st.slider("至少出現天數", 1, 20, 1)
@@ -314,7 +318,6 @@ with tab2:
             fig.add_trace(go.Bar(x=df_chart["日期"], y=df_chart["估算張數"], name="每日", marker_color=df_chart["顏色"], opacity=0.8), secondary_y=False)
             fig.add_trace(go.Scatter(x=df_chart["日期"], y=df_chart["累積張數"], name="庫存", line=dict(color='#2C3E50', width=2), mode='lines'), secondary_y=True)
 
-            # 圖表設定
             fig.update_layout(
                 title=dict(text="籌碼分佈趨勢", font=dict(color='#333333', size=16)),
                 plot_bgcolor='#FFFFFF',
