@@ -16,7 +16,7 @@ st.set_page_config(
     page_icon="📈"
 )
 
-# --- CSS 全域美化 (終極深色修正版) ---
+# --- CSS 全域美化 (修復篩選文字與圖表樣式) ---
 custom_css = """
     <style>
         /* 1. 背景色 */
@@ -26,7 +26,7 @@ custom_css = """
         
         /* 2. 標題優化 */
         h1 {
-            color: #333333 !important; /* 加深 */
+            color: #333333 !important;
             font-family: 'Helvetica Neue', 'PingFang TC', 'Microsoft JhengHei', sans-serif;
             font-weight: 600 !important;
             font-size: 1.5rem !important;
@@ -35,19 +35,11 @@ custom_css = """
             padding-bottom: 10px !important;
         }
         
-        /* 3. Expander 標題 */
-        .streamlit-expanderHeader {
-            background-color: #FFFFFF;
-            border-radius: 5px;
-            color: #333333 !important;
-            font-weight: 600;
-        }
-        
-        /* 4. 隱藏 footer */
+        /* 3. 隱藏 footer */
         #MainMenu {visibility: hidden;}
         footer {visibility: hidden;}
         
-        /* 5. 分頁籤優化 */
+        /* 4. 分頁籤優化 */
         .stTabs [data-baseweb="tab-list"] {
             gap: 8px;
         }
@@ -55,7 +47,7 @@ custom_css = """
             height: 40px;
             background-color: #EFEFEF;
             border-radius: 5px;
-            color: #555555; /* 加深 */
+            color: #555555;
             font-size: 14px;
             font-weight: 500;
             padding: 0px 16px;
@@ -67,37 +59,48 @@ custom_css = """
             font-weight: bold;
         }
         
-        /* 6. 指標 (Metric) 顏色修正 - 關鍵修改 */
-        /* 標籤 (如：平均成本) */
+        /* 5. 指標 (Metric) 顏色修正 */
         [data-testid="stMetricLabel"] { 
             font-size: 14px !important; 
-            color: #444444 !important; /* 改成深灰色，原本太淡 */
+            color: #444444 !important; 
             font-weight: 500;
         }
-        /* 數值 (如：1277.79) */
         [data-testid="stMetricValue"] { 
             font-size: 20px !important; 
-            color: #222222 !important; /* 改成近黑色 */
+            color: #222222 !important; 
             font-weight: 600;
         }
-        /* 漲跌箭頭文字 */
-        [data-testid="stMetricDelta"] {
-            font-weight: bold;
-        }
 
-        /* 7. 強制全域文字顏色 (防止深色模式反白) */
+        /* 6. 【關鍵修正】強制 Expander 內部所有文字為深色 */
+        /* 針對 Expander 的標題 */
+        .streamlit-expanderHeader p {
+            color: #333333 !important;
+            font-weight: 600;
+            font-size: 15px;
+        }
+        .streamlit-expanderHeader {
+            background-color: #FFFFFF;
+            border: 1px solid #E0E0E0;
+            border-radius: 8px;
+        }
+        
+        /* 針對 Expander 內部的所有 Label (Radio, Slider, Selectbox) */
+        [data-testid="stExpander"] label p {
+            color: #333333 !important;
+            font-weight: 500;
+        }
+        [data-testid="stExpander"] div[data-baseweb="select"] div {
+            color: #333333 !important;
+        }
+        [data-testid="stExpander"] p {
+            color: #333333 !important;
+        }
+        
+        /* 7. 全域文字強制深色 */
         .stMarkdown, .stMarkdown p, .stText, h2, h3 {
             color: #333333 !important;
         }
         
-        /* Widget Labels */
-        .stRadio label, .stSelectbox label, .stSlider label, .stNumberInput label, .stDateInput label {
-            color: #333333 !important;
-            font-weight: 500;
-        }
-        div[role="radiogroup"] label div p {
-            color: #333333 !important;
-        }
     </style>
 """
 st.markdown(custom_css, unsafe_allow_html=True)
@@ -263,7 +266,7 @@ with tab2:
                 st.metric("平均成本", f"{avg_cost}", delta=round(current_price-avg_cost, 1), delta_color=delta_color)
             with col_m3: st.metric("收盤價", f"{current_price}")
 
-            # 繪圖設定 (強制深色字體)
+            # 繪圖
             df_chart["累積張數"] = df_chart["估算張數"].cumsum()
             df_chart["顏色"] = df_chart["估算張數"].apply(lambda x: "#E67F75" if x > 0 else "#6CB097")
 
@@ -272,18 +275,30 @@ with tab2:
             fig.add_trace(go.Scatter(x=df_chart["日期"], y=df_chart["累積張數"], name="庫存", line=dict(color='#2C3E50', width=2), mode='lines'), secondary_y=True)
 
             fig.update_layout(
-                # 強制全圖表字體為深灰 (解決深色模式看不見問題)
-                font=dict(color='#333333'), 
+                # 【修正 1】補回標題文字，並設定字體顏色
+                title=dict(text="籌碼分佈趨勢", font=dict(color='#333333', size=16)),
+                
+                # 【修正 2】圖表背景設為白色，加上卡片感
+                plot_bgcolor='#FFFFFF',
+                paper_bgcolor='#FFFFFF',
+                
+                # 字體強制深色
+                font=dict(color='#333333'),
                 legend=dict(orientation="h", y=1.1, x=0, font=dict(color='#333333')),
-                title=dict(font=dict(color='#333333')),
+                
                 height=350,
-                margin=dict(l=10, r=10, t=40, b=10),
-                plot_bgcolor='rgba(0,0,0,0)',
-                paper_bgcolor='rgba(0,0,0,0)',
+                margin=dict(l=15, r=15, t=50, b=10), # 稍微增加邊距
+                
                 xaxis=dict(showgrid=False, tickfont=dict(color='#555555'), title_font=dict(color='#333333')),
-                yaxis=dict(showgrid=True, gridcolor="#E0E0E0", tickfont=dict(color='#555555'))
+                yaxis=dict(showgrid=True, gridcolor="#F0F0F0", tickfont=dict(color='#555555'))
             )
-            st.plotly_chart(fig, use_container_width=True)
+            
+            # 【修正 3】關閉縮放功能 (避免手機滑動誤觸)
+            st.plotly_chart(
+                fig, 
+                use_container_width=True, 
+                config={'displayModeBar': False, 'staticPlot': False, 'scrollZoom': False}
+            )
             
             with st.expander("📄 詳細數據"):
                 st.dataframe(df_chart[["日期", "收盤價", "估算張數", "累積張數"]], use_container_width=True, hide_index=True)
