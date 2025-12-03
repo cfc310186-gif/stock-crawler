@@ -16,7 +16,7 @@ st.set_page_config(
     page_icon="📈"
 )
 
-# --- CSS 全域美化 (下拉選單浮動視窗終極修復) ---
+# --- CSS 全域美化 (針對截圖問題的專項修復) ---
 custom_css = """
     <style>
         /* 0. 根變數覆寫 */
@@ -33,10 +33,21 @@ custom_css = """
             background-color: #F9F9F7;
         }
         
-        /* 2. 標題與一般文字強制深色 */
-        h1, h2, h3, p, div, span, label {
+        /* 2. 【修復標題換行】縮小字體以適配手機寬度 */
+        h1 {
             color: #333333 !important;
             font-family: 'Helvetica Neue', 'PingFang TC', 'Microsoft JhengHei', sans-serif;
+            font-weight: 600 !important;
+            font-size: 1.25rem !important; /* 縮小字體 (原本 1.5rem) */
+            white-space: nowrap !important; /* 強制不換行 */
+            padding-top: 10px !important;
+            padding-bottom: 5px !important;
+            letter-spacing: -0.5px; /* 稍微縮減字距 */
+        }
+        
+        /* 一般文字強制深色 */
+        h2, h3, p, div, span, label {
+            color: #333333 !important;
         }
         
         /* 3. Radio 按鈕修復 */
@@ -79,45 +90,46 @@ custom_css = """
             font-weight: 500 !important;
         }
         
-        /* 6. 【下拉選單浮動視窗 (Popover) 核彈級修正】 
-           這裡針對的是點開選單後跳出來的那一塊浮動視窗
-        */
+        /* 6. 【下拉選單浮動視窗 (Popover) 核彈級修正】 */
         
-        /* 強制浮動視窗容器背景為白 */
-        div[data-baseweb="popover"] {
-            background-color: #FFFFFF !important;
-        }
-        
-        /* 強制浮動視窗內的所有子容器背景為白 */
+        /* 針對浮動視窗的最外層容器，強制背景為白 */
         div[data-baseweb="popover"] > div {
             background-color: #FFFFFF !important;
+            border: 1px solid #eee !important;
         }
 
-        /* 選單列表 */
+        /* 選單列表容器 */
         ul[data-baseweb="menu"] {
             background-color: #FFFFFF !important;
         }
         
-        /* 選項本身 */
+        /* 選項本身：白底黑字 */
         li[data-baseweb="option"] {
             background-color: #FFFFFF !important;
             color: #333333 !important;
+            opacity: 1 !important; /* 防止被系統變透明 */
         }
         
-        /* 選項文字 */
+        /* 選項內的文字容器 */
         li[data-baseweb="option"] div {
              color: #333333 !important;
         }
         
-        /* 選中或滑鼠滑過的狀態 */
-        li[data-baseweb="option"][aria-selected="true"] {
-            background-color: #E67F75 !important; /* 紅色背景 */
-            color: #FFFFFF !important;             /* 白色文字 */
-        }
-        li[data-baseweb="option"][aria-selected="true"] div {
+        /* 滑鼠滑過或選中狀態：紅色背景，白色文字 */
+        li[data-baseweb="option"][aria-selected="true"],
+        li[data-baseweb="option"]:hover {
+            background-color: #E67F75 !important;
             color: #FFFFFF !important;
         }
         
+        /* 選中時，內部的文字也要變白 */
+        li[data-baseweb="option"][aria-selected="true"] div,
+        li[data-baseweb="option"]:hover div {
+             color: #FFFFFF !important;
+             -webkit-text-fill-color: #FFFFFF !important;
+        }
+
+
         /* 7. Slider 滑桿 */
         div[data-baseweb="slider"] div[role="slider"] {
             color: #333333 !important;
@@ -201,6 +213,7 @@ with st.expander("🔍 點擊設定篩選條件 (方向、天數、金額)", exp
     f_col1, f_col2 = st.columns(2)
     
     with f_col1:
+        # 修復文字顏色
         filter_side = st.radio("尋找方向", ["買超 (主力進)", "賣超 (主力出)"], horizontal=True)
         is_buy = True if "買超" in filter_side else False
         min_appear_days = st.slider("至少出現天數", 1, 20, 1)
