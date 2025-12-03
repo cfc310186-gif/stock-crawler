@@ -16,7 +16,7 @@ st.set_page_config(
     page_icon="📈"
 )
 
-# --- CSS 全域美化 (修正深色模式文字消失問題) ---
+# --- CSS 全域美化 (終極深色修正版) ---
 custom_css = """
     <style>
         /* 1. 背景色 */
@@ -26,24 +26,24 @@ custom_css = """
         
         /* 2. 標題優化 */
         h1 {
-            color: #4A4A4A !important;
+            color: #333333 !important; /* 加深 */
             font-family: 'Helvetica Neue', 'PingFang TC', 'Microsoft JhengHei', sans-serif;
-            font-weight: 400 !important;
+            font-weight: 600 !important;
             font-size: 1.5rem !important;
             white-space: nowrap !important;
             padding-top: 10px !important;
             padding-bottom: 10px !important;
         }
         
-        /* 3. 調整 Expander (篩選區塊) 的外觀 */
+        /* 3. Expander 標題 */
         .streamlit-expanderHeader {
             background-color: #FFFFFF;
             border-radius: 5px;
-            color: #4A4A4A !important; /* 強制標題深色 */
-            font-weight: 500;
+            color: #333333 !important;
+            font-weight: 600;
         }
         
-        /* 4. 隱藏 footer 但保留 header */
+        /* 4. 隱藏 footer */
         #MainMenu {visibility: hidden;}
         footer {visibility: hidden;}
         
@@ -55,41 +55,49 @@ custom_css = """
             height: 40px;
             background-color: #EFEFEF;
             border-radius: 5px;
-            color: #666;
+            color: #555555; /* 加深 */
             font-size: 14px;
+            font-weight: 500;
             padding: 0px 16px;
         }
         .stTabs [aria-selected="true"] {
             background-color: #FFFFFF;
             color: #E67F75;
             box-shadow: 0px 2px 5px rgba(0,0,0,0.05);
+            font-weight: bold;
         }
         
-        /* 6. 指標優化 */
-        [data-testid="stMetricLabel"] { font-size: 13px !important; color: #888 !important; }
-        [data-testid="stMetricValue"] { font-size: 18px !important; color: #333 !important; }
+        /* 6. 指標 (Metric) 顏色修正 - 關鍵修改 */
+        /* 標籤 (如：平均成本) */
+        [data-testid="stMetricLabel"] { 
+            font-size: 14px !important; 
+            color: #444444 !important; /* 改成深灰色，原本太淡 */
+            font-weight: 500;
+        }
+        /* 數值 (如：1277.79) */
+        [data-testid="stMetricValue"] { 
+            font-size: 20px !important; 
+            color: #222222 !important; /* 改成近黑色 */
+            font-weight: 600;
+        }
+        /* 漲跌箭頭文字 */
+        [data-testid="stMetricDelta"] {
+            font-weight: bold;
+        }
 
-        /* --- 7. (新) 強制修正深色模式下的文字顏色 --- */
-        /* 這段代碼會強制所有標籤文字變成深灰，避免在手機暗模式下變成白色 */
-        
-        /* 一般文字與 Markdown */
-        .stMarkdown, .stMarkdown p {
-            color: #4A4A4A !important;
+        /* 7. 強制全域文字顏色 (防止深色模式反白) */
+        .stMarkdown, .stMarkdown p, .stText, h2, h3 {
+            color: #333333 !important;
         }
         
-        /* Widget 的標題 Label (如：尋找方向、時間範圍...) */
+        /* Widget Labels */
         .stRadio label, .stSelectbox label, .stSlider label, .stNumberInput label, .stDateInput label {
-            color: #4A4A4A !important;
+            color: #333333 !important;
+            font-weight: 500;
         }
-        
-        /* Radio 按鈕選項的文字 */
         div[role="radiogroup"] label div p {
-            color: #4A4A4A !important;
+            color: #333333 !important;
         }
-        
-        /* 讓 Input 輸入框在暗模式下保持可讀 (白字黑底或適應) */
-        /* 這裡不強制改 Input 內部，讓它隨系統變換，確保對比度 */
-        
     </style>
 """
 st.markdown(custom_css, unsafe_allow_html=True)
@@ -142,21 +150,18 @@ except Exception as e:
     st.stop()
 
 # --- 4. 篩選條件 (Expander) ---
-with st.expander("🔍 點擊設定篩選條件 (方向、天數、金額)", expanded=True):
+with st.expander("🔍 點擊設定篩選條件 (方向、天數、金額)", expanded=False):
     f_col1, f_col2 = st.columns(2)
     
     with f_col1:
-        # 這裡的 Label 已經被 CSS 強制改為深色
         filter_side = st.radio("尋找方向", ["買超 (主力進)", "賣超 (主力出)"], horizontal=True)
         is_buy = True if "買超" in filter_side else False
-        
         min_appear_days = st.slider("至少出現天數", 1, 20, 1)
 
     with f_col2:
         filter_days_option = st.selectbox("時間範圍", ["近 3 天", "近 5 天", "近 10 天", "近 20 天", "自訂"])
         amount_threshold = st.number_input("累計金額大於(千)", value=1000, step=500)
 
-    # 自訂日期邏輯
     end_date = max_db_date
     if filter_days_option == "自訂":
         date_range = st.date_input("選擇區間", [min_db_date, max_db_date])
@@ -199,7 +204,6 @@ if 'selected_stock_name' not in st.session_state:
 
 with tab1:
     st.caption(f"📅 區間：{start_date} ~ {end_date} ({selected_days_count}天) | 門檻：{amount_threshold}千")
-    
     if final_list.empty:
         st.info("💡 無符合條件股票，請點擊上方「🔍」放寬條件。")
     else:
@@ -223,9 +227,8 @@ with tab2:
     stock_name = st.session_state.selected_stock_name
     
     if stock_id:
-        st.markdown(f"### {stock_name} <span style='font-size:16px;color:#888'>({stock_id})</span>", unsafe_allow_html=True)
+        st.markdown(f"### {stock_name} <span style='font-size:16px;color:#555'>({stock_id})</span>", unsafe_allow_html=True)
         
-        # 圖表邏輯
         if selected_days_count < 30:
             chart_start_date = end_date - timedelta(days=29)
         else:
@@ -260,7 +263,7 @@ with tab2:
                 st.metric("平均成本", f"{avg_cost}", delta=round(current_price-avg_cost, 1), delta_color=delta_color)
             with col_m3: st.metric("收盤價", f"{current_price}")
 
-            # 繪圖
+            # 繪圖設定 (強制深色字體)
             df_chart["累積張數"] = df_chart["估算張數"].cumsum()
             df_chart["顏色"] = df_chart["估算張數"].apply(lambda x: "#E67F75" if x > 0 else "#6CB097")
 
@@ -269,13 +272,16 @@ with tab2:
             fig.add_trace(go.Scatter(x=df_chart["日期"], y=df_chart["累積張數"], name="庫存", line=dict(color='#2C3E50', width=2), mode='lines'), secondary_y=True)
 
             fig.update_layout(
-                legend=dict(orientation="h", y=1.1, x=0),
+                # 強制全圖表字體為深灰 (解決深色模式看不見問題)
+                font=dict(color='#333333'), 
+                legend=dict(orientation="h", y=1.1, x=0, font=dict(color='#333333')),
+                title=dict(font=dict(color='#333333')),
                 height=350,
                 margin=dict(l=10, r=10, t=40, b=10),
                 plot_bgcolor='rgba(0,0,0,0)',
                 paper_bgcolor='rgba(0,0,0,0)',
-                xaxis=dict(showgrid=False),
-                yaxis=dict(showgrid=True, gridcolor="#EEE")
+                xaxis=dict(showgrid=False, tickfont=dict(color='#555555'), title_font=dict(color='#333333')),
+                yaxis=dict(showgrid=True, gridcolor="#E0E0E0", tickfont=dict(color='#555555'))
             )
             st.plotly_chart(fig, use_container_width=True)
             
