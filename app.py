@@ -9,71 +9,69 @@ from datetime import datetime, timedelta
 import os
 import json
 
-# --- 1. 頁面設定 (手機優先 + 文青風格設定) ---
+# --- 1. 頁面設定 ---
 st.set_page_config(
     page_title="永豐松山籌碼雷達", 
     layout="wide", 
-    page_icon="📈",
-    initial_sidebar_state="auto"
+    page_icon="📈"
 )
 
-# --- CSS 全域美化 (文青風 + 標題防換行) ---
+# --- CSS 全域美化 (修正按鈕消失問題) ---
 custom_css = """
     <style>
-        /* 1. 整體背景色 - 柔和米白 */
+        /* 1. 背景色 */
         .stApp {
             background-color: #F9F9F7;
         }
         
-        /* 2. 標題優化 - 永豐松山籌碼雷達 */
+        /* 2. 標題優化 */
         h1 {
             color: #4A4A4A !important;
             font-family: 'Helvetica Neue', 'PingFang TC', 'Microsoft JhengHei', sans-serif;
             font-weight: 400 !important;
-            font-size: 1.6rem !important; /* 調整字體大小適配手機 */
-            white-space: nowrap !important; /* 強制不換行 */
-            overflow: hidden;
-            text-overflow: ellipsis;
-            padding-top: 0px !important;
+            font-size: 1.5rem !important;
+            white-space: nowrap !important;
+            padding-top: 10px !important;
+            padding-bottom: 10px !important;
         }
         
-        /* 3. 隱藏預設選單與 footer */
+        /* 3. 調整 Expander (篩選區塊) 的外觀 */
+        .streamlit-expanderHeader {
+            background-color: #FFFFFF;
+            border-radius: 5px;
+            color: #4A4A4A;
+            font-weight: 500;
+        }
+        
+        /* 4. 隱藏 footer 但保留 header (避免按鈕消失) */
         #MainMenu {visibility: hidden;}
         footer {visibility: hidden;}
-        header {visibility: hidden;} /* 隱藏上方紅線條 */
         
-        /* 4. 分頁籤樣式 (Tabs) */
+        /* 5. 分頁籤優化 */
         .stTabs [data-baseweb="tab-list"] {
-            gap: 10px;
+            gap: 8px;
         }
         .stTabs [data-baseweb="tab"] {
             height: 40px;
-            white-space: pre-wrap;
-            background-color: #F0F0F0;
-            border-radius: 5px 5px 0px 0px;
-            color: #4A4A4A;
+            background-color: #EFEFEF;
+            border-radius: 5px;
+            color: #666;
             font-size: 14px;
+            padding: 0px 16px;
         }
         .stTabs [aria-selected="true"] {
             background-color: #FFFFFF;
-            color: #EF553B;
-            font-weight: bold;
+            color: #E67F75; /* 文青紅 */
+            box-shadow: 0px 2px 5px rgba(0,0,0,0.05);
         }
-
-        /* 5. 調整 Metric 指標樣式 */
-        [data-testid="stMetricLabel"] {
-            font-size: 14px !important;
-            color: #888888 !important;
-        }
-        [data-testid="stMetricValue"] {
-            font-size: 18px !important;
-            color: #333333 !important;
-        }
+        
+        /* 6. 指標優化 */
+        [data-testid="stMetricLabel"] { font-size: 13px !important; color: #888 !important; }
+        [data-testid="stMetricValue"] { font-size: 18px !important; color: #333 !important; }
     </style>
 """
 st.markdown(custom_css, unsafe_allow_html=True)
 
-# 顯示標題
 st.title("📱 永豐松山籌碼雷達")
 
 # --- 2. 讀取資料函式 ---
@@ -109,11 +107,11 @@ def load_data():
         
     return df
 
-# --- 3. 載入資料與防呆 ---
+# --- 3. 載入資料 ---
 try:
     df_raw = load_data()
     if df_raw.empty:
-        st.warning("⚠️ 目前無資料，請確認爬蟲是否執行成功。")
+        st.warning("⚠️ 目前無資料")
         st.stop()
     min_db_date = df_raw["日期"].min().date()
     max_db_date = df_raw["日期"].max().date()
@@ -121,28 +119,33 @@ except Exception as e:
     st.error(f"連線錯誤: {e}")
     st.stop()
 
-# --- 4. 側邊欄：篩選條件 ---
-st.sidebar.header("🔍 篩選條件")
-filter_side = st.sidebar.radio("方向", ["買超 (主力進)", "賣超 (主力出)"])
-is_buy = True if "買超" in filter_side else False
+# --- 4. 篩選條件 (改為 Expander 下拉選單) ---
+# 預設 expanded=True (展開)，方便使用者第一次進來看到
+with st.expander("🔍 點擊設定篩選條件 (方向、天數、金額)", expanded=False):
+    f_col1, f_col2 = st.columns(2)
+    
+    with f_col1:
+        filter_side = st.radio("尋找方向", ["買超 (主力進)", "賣超 (主力出)"], horizontal=True)
+        is_buy = True if "買超" in filter_side else False
+        
+        min_appear_days = st.slider("至少出現天數", 1, 20, 1)
 
-filter_days_option = st.sidebar.selectbox("時間範圍", ["近 3 天", "近 5 天", "近 10 天", "近 20 天", "自訂"])
-end_date = max_db_date
+    with f_col2:
+        filter_days_option = st.selectbox("時間範圍", ["近 3 天", "近 5 天", "近 10 天", "近 20 天", "自訂"])
+        amount_threshold = st.number_input("累計金額大於(千)", value=1000, step=500)
 
-# 計算起始日
-if filter_days_option == "自訂":
-    date_range = st.sidebar.date_input("區間", [min_db_date, max_db_date])
-    start_date = date_range[0] if len(date_range) > 0 else min_db_date
-    if len(date_range) == 2: end_date = date_range[1]
-else:
-    days_back = int(filter_days_option.split(" ")[1])
-    start_date = end_date - timedelta(days=days_back)
-
-# 計算篩選的天數長度 (用於決定圖表 X 軸)
-selected_days_count = (end_date - start_date).days
-
-min_appear_days = st.sidebar.slider("出現天數", 1, 20, 1)
-amount_threshold = st.sidebar.number_input("累計金額(千)", value=1000, step=500)
+    # 自訂日期邏輯
+    end_date = max_db_date
+    if filter_days_option == "自訂":
+        date_range = st.date_input("選擇區間", [min_db_date, max_db_date])
+        start_date = date_range[0] if len(date_range) > 0 else min_db_date
+        if len(date_range) == 2: end_date = date_range[1]
+    else:
+        days_back = int(filter_days_option.split(" ")[1])
+        start_date = end_date - timedelta(days=days_back)
+    
+    # 計算篩選天數
+    selected_days_count = (end_date - start_date).days
 
 # --- 5. 資料篩選邏輯 ---
 mask_date = (df_raw["日期"].dt.date >= start_date) & (df_raw["日期"].dt.date <= end_date)
@@ -168,31 +171,31 @@ final_list = stats[
 # --- 6. 介面呈現 (Tabs) ---
 tab1, tab2 = st.tabs(["📋 選股清單", "📊 個股分析"])
 
-# Session State 初始化
 if 'selected_stock_id' not in st.session_state:
     st.session_state.selected_stock_id = None
 if 'selected_stock_name' not in st.session_state:
     st.session_state.selected_stock_name = None
 
 with tab1:
-    st.caption(f"📅 篩選區間：{start_date} ~ {end_date} (共 {selected_days_count} 天)")
+    st.caption(f"📅 區間：{start_date} ~ {end_date} ({selected_days_count}天) | 門檻：{amount_threshold}千")
+    
     if final_list.empty:
-        st.info("💡 無符合條件的股票，請嘗試放寬篩選條件。")
+        st.info("💡 無符合條件股票，請點擊上方「🔍」放寬條件。")
     else:
-        st.markdown(f"**共 {len(final_list)} 檔** (請點擊選取)")
+        st.markdown(f"**共 {len(final_list)} 檔** (點擊查看)")
         event = st.dataframe(
             final_list, 
             on_select="rerun", 
             selection_mode="single-row", 
             use_container_width=True, 
             hide_index=True,
-            height=450
+            height=400
         )
         if len(event.selection.rows) > 0:
             row = final_list.iloc[event.selection.rows[0]]
             st.session_state.selected_stock_id = row["代號"]
             st.session_state.selected_stock_name = row["名稱"]
-            st.toast(f"已選擇：{row['名稱']}，請切換至「個股分析」", icon="👉")
+            st.toast(f"已選擇：{row['名稱']}，請切換分頁", icon="👉")
 
 with tab2:
     stock_id = st.session_state.selected_stock_id
@@ -201,8 +204,7 @@ with tab2:
     if stock_id:
         st.markdown(f"### {stock_name} <span style='font-size:16px;color:#888'>({stock_id})</span>", unsafe_allow_html=True)
         
-        # --- A. 圖表時間軸邏輯 ---
-        # 規則：如果篩選天數 < 30 天，圖表強制顯示 30 天；如果 >= 30 天，則依據實際篩選天數顯示
+        # A. 圖表時間軸邏輯
         if selected_days_count < 30:
             chart_start_date = end_date - timedelta(days=29)
         else:
@@ -214,11 +216,9 @@ with tab2:
         df_chart = df_raw.loc[mask_chart].sort_values(by="日期").copy()
         
         if df_chart.empty:
-            st.info("此區間無交易資料")
+            st.info("此區間無資料")
         else:
-            # --- B. 計算「區間平均成本」 ---
-            # 關鍵：這裡的平均成本必須依據「篩選區間 (start_date ~ end_date)」計算，而不是圖表顯示的區間
-            # 這樣才符合使用者的篩選邏輯 (例如：這 5 天買超的成本是多少)
+            # B. 統計
             mask_stat = (df_raw["代號"] == stock_id) & \
                         (df_raw["日期"].dt.date >= start_date) & \
                         (df_raw["日期"].dt.date <= end_date)
@@ -227,94 +227,40 @@ with tab2:
             total_amt = df_stat["買賣超金額(千)"].sum()
             total_sheets = df_stat["估算張數"].sum()
             current_price = df_chart.iloc[-1]['收盤價']
+            avg_cost = round(total_amt / total_sheets, 2) if total_sheets != 0 else 0
             
-            # 避免除以零
-            if total_sheets != 0:
-                avg_cost = round(total_amt / total_sheets, 2)
-            else:
-                avg_cost = 0
-            
-            # --- C. 呈現關鍵指標 ---
+            # C. 指標
             col_m1, col_m2, col_m3 = st.columns(3)
-            
-            with col_m1:
-                st.metric("篩選區間累積", f"{int(total_sheets)} 張")
-            
+            with col_m1: st.metric("區間累積", f"{int(total_sheets)} 張")
             with col_m2:
-                # 成本紅綠燈：若現價 > 成本 = 賺錢(紅)，反之賠錢(綠)
-                # 若為賣超(張數為負)，邏輯相反：賣得比現價高 = 賺錢
                 delta_color = "off"
                 if avg_cost > 0:
                     diff = current_price - avg_cost
-                    # 若是買超狀態 (張數>0)
-                    if total_sheets > 0:
-                        delta_color = "normal" if diff > 0 else "inverse"
-                    # 若是賣超狀態 (張數<0)
-                    elif total_sheets < 0:
-                         delta_color = "inverse" if diff > 0 else "normal"
-                         
-                st.metric("區間平均成本", f"{avg_cost}", delta=round(current_price - avg_cost, 1), delta_color=delta_color)
-            
-            with col_m3:
-                st.metric("最新收盤價", f"{current_price}")
+                    if total_sheets > 0: delta_color = "normal" if diff > 0 else "inverse"
+                    elif total_sheets < 0: delta_color = "inverse" if diff > 0 else "normal"
+                st.metric("平均成本", f"{avg_cost}", delta=round(current_price-avg_cost, 1), delta_color=delta_color)
+            with col_m3: st.metric("收盤價", f"{current_price}")
 
-            # --- D. 繪製圖表 (文青配色) ---
-            # 累積張數計算 (基於圖表區間)
+            # D. 繪圖
             df_chart["累積張數"] = df_chart["估算張數"].cumsum()
-            
-            # 配色：買超用柔和紅 (#E67F75)，賣超用柔和綠 (#6CB097)
             df_chart["顏色"] = df_chart["估算張數"].apply(lambda x: "#E67F75" if x > 0 else "#6CB097")
 
             fig = make_subplots(specs=[[{"secondary_y": True}]])
-            
-            # 1. 柱狀圖 (每日)
-            fig.add_trace(
-                go.Bar(
-                    x=df_chart["日期"], 
-                    y=df_chart["估算張數"], 
-                    name="每日買賣(張)", 
-                    marker_color=df_chart["顏色"],
-                    opacity=0.8
-                ), 
-                secondary_y=False
-            )
-            
-            # 2. 折線圖 (累積庫存) - 使用深藍色 (#2C3E50)
-            fig.add_trace(
-                go.Scatter(
-                    x=df_chart["日期"], 
-                    y=df_chart["累積張數"], 
-                    name="累積庫存", 
-                    line=dict(color='#2C3E50', width=2.5),
-                    mode='lines' # 文青風通常不顯示圓點，只顯示線條
-                ), 
-                secondary_y=True
-            )
+            fig.add_trace(go.Bar(x=df_chart["日期"], y=df_chart["估算張數"], name="每日", marker_color=df_chart["顏色"], opacity=0.8), secondary_y=False)
+            fig.add_trace(go.Scatter(x=df_chart["日期"], y=df_chart["累積張數"], name="庫存", line=dict(color='#2C3E50', width=2), mode='lines'), secondary_y=True)
 
-            # 圖表美化
             fig.update_layout(
-                title=dict(text="籌碼分佈趨勢", font=dict(size=14, color="#555")),
-                legend=dict(orientation="h", y=1.15, x=0, font=dict(color="#555")),
-                height=380,
-                margin=dict(l=10, r=10, t=50, b=10),
-                plot_bgcolor='rgba(0,0,0,0)', # 透明背景
+                legend=dict(orientation="h", y=1.1, x=0),
+                height=350,
+                margin=dict(l=10, r=10, t=40, b=10),
+                plot_bgcolor='rgba(0,0,0,0)',
                 paper_bgcolor='rgba(0,0,0,0)',
-                xaxis=dict(showgrid=False, tickfont=dict(color="#666")),
-                yaxis=dict(showgrid=True, gridcolor="#E0E0E0", tickfont=dict(color="#666")), # 只留 Y 軸格線
+                xaxis=dict(showgrid=False),
+                yaxis=dict(showgrid=True, gridcolor="#EEE")
             )
-            
             st.plotly_chart(fig, use_container_width=True)
             
-            # 詳細表格
-            with st.expander("📄 查看每日詳細數據"):
-                st.dataframe(
-                    df_chart[["日期", "收盤價", "估算張數", "累積張數"]].style.format({
-                        "收盤價": "{:.2f}", 
-                        "估算張數": "{:.0f}", 
-                        "累積張數": "{:.0f}"
-                    }), 
-                    use_container_width=True,
-                    hide_index=True
-                )
+            with st.expander("📄 詳細數據"):
+                st.dataframe(df_chart[["日期", "收盤價", "估算張數", "累積張數"]], use_container_width=True, hide_index=True)
     else:
-        st.info("👈 請先點選「選股清單」分頁，選擇一檔股票。")
+        st.info("👈 請先在「選股清單」選擇股票")
