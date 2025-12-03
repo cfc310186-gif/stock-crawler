@@ -16,20 +16,20 @@ st.set_page_config(
     page_icon="📈"
 )
 
-# --- CSS 全域美化 (終極修復：強制鎖定亮色主題配色) ---
+# --- CSS 全域美化 (核彈級修正：強制亮色主題變數) ---
 custom_css = """
     <style>
-        /* 0. 強制覆寫 Streamlit 預設變數 (關鍵！) 
-           這會告訴瀏覽器：不管系統是不是深色模式，這裡所有的預設文字都要是深色的
+        /* 0. 【核彈級修正】強制覆寫 Streamlit 的根變數 
+           這會強制將 App 的基礎配色鎖定為「亮色模式」，徹底解決深色模式字體變白的問題
         */
         :root {
             --primaryColor: #E67F75;
             --backgroundColor: #F9F9F7;
-            --secondaryBackgroundColor: #EFEFEF;
-            --textColor: #333333; /* 強制內文深黑 */
+            --secondaryBackgroundColor: #FFFFFF;
+            --textColor: #333333; /* 強制所有文字為深色 */
             --font: "sans-serif";
         }
-    
+
         /* 1. 背景色 */
         .stApp {
             background-color: #F9F9F7;
@@ -46,7 +46,7 @@ custom_css = """
             padding-bottom: 10px !important;
         }
         
-        /* 3. Expander 樣式 */
+        /* 3. Expander (篩選區塊) 優化 */
         .streamlit-expanderHeader {
             background-color: #FFFFFF;
             border: 1px solid #E0E0E0;
@@ -59,9 +59,7 @@ custom_css = """
             color: #333333 !important;
         }
 
-        /* 4. 【輸入框終極修正】強制白底黑字，修復手機深色模式反白問題 */
-        
-        /* 下拉選單 (Selectbox) 與 數字輸入 (NumberInput) 的容器 */
+        /* 4. 【輸入框終極修正】強制白底黑字 + iOS 修正 */
         div[data-baseweb="select"] > div, 
         div[data-baseweb="input"] > div {
             background-color: #FFFFFF !important;
@@ -69,22 +67,22 @@ custom_css = """
             color: #333333 !important;
         }
         
-        /* 輸入框內的文字 - 針對 iOS Safari 的特殊修正 */
-        div[data-baseweb="select"] span, 
-        div[data-baseweb="input"] input {
+        /* 強制輸入框內的文字顏色 (包含 iOS Safari) */
+        input, .stSelectbox span, .stNumberInput input {
             color: #333333 !important;
-            -webkit-text-fill-color: #333333 !important; /* iOS 強制填色 */
-            caret-color: #333333 !important; /* 游標顏色 */
+            -webkit-text-fill-color: #333333 !important; /* iOS 專用 */
+            caret-color: #333333 !important;
             font-weight: 500 !important;
         }
         
         /* 5. Radio Button (買超/賣超) 文字修正 */
-        div[role="radiogroup"] label {
-            color: #333333 !important;
-        }
         div[role="radiogroup"] label p {
             color: #333333 !important;
             font-weight: 500 !important;
+        }
+        /* Radio 的選取圓點顏色 */
+        div[role="radiogroup"] div[data-baseweb="radio"] {
+            color: #333333 !important;
         }
         
         /* 6. Slider (滑桿) 文字修正 */
@@ -302,11 +300,12 @@ with tab2:
             fig.add_trace(go.Bar(x=df_chart["日期"], y=df_chart["估算張數"], name="每日", marker_color=df_chart["顏色"], opacity=0.8), secondary_y=False)
             fig.add_trace(go.Scatter(x=df_chart["日期"], y=df_chart["累積張數"], name="庫存", line=dict(color='#2C3E50', width=2), mode='lines'), secondary_y=True)
 
+            # 【修正 undefined】 確保 title_text 被正確設定
             fig.update_layout(
-                title=dict(text="籌碼分佈趨勢", font=dict(color='#333333', size=16)),
+                title_text="籌碼分佈趨勢", # 直接使用 title_text 參數，避免 undefined
                 plot_bgcolor='#FFFFFF',
                 paper_bgcolor='#FFFFFF',
-                font=dict(color='#333333'),
+                font=dict(color='#333333'), # 強制圖表深色字體
                 legend=dict(orientation="h", y=1.1, x=0, font=dict(color='#333333')),
                 height=350,
                 margin=dict(l=15, r=15, t=50, b=10),
