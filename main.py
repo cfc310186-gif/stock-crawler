@@ -1,132 +1,212 @@
-import requests
+import pandas as pd
 import gspread
 from oauth2client.service_account import ServiceAccountCredentials
-import datetime
-import urllib3
-import re 
+import requests
+from io import StringIO
 import time
+import datetime
+import os
+import random
 import yfinance as yf
 
 # --- 設定區 ---
 SHEET_NAME = "Stock_Data"
 JSON_FILE_NAME = "service_account.json"
-BASE_URL = "https://fubon-ebrokerdj.fbs.com.tw/z/zg/zgb/zgb0.djhtm?a=9A00&b=0039004100390031&c=B"
+BROKER_ID = "9A91"  # 永豐金-松山
 
-urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+# 富邦證券網址
+FUBON_URL = f"https://fubon-ebrokerdj.fubon.com.tw/z/zg/zgb/zgb0.djhtm?b={BROKER_ID}"
 
-# --- 輔助函式：查詢股價 ---
-def get_stock_price(stock_id, date_str):
+# --- 監控名單 (只針對這些股票抓精確成本) ---
+WATCHLIST = [
+    '3450', '3689', '3533', '3665', '3605', '3217', '6197', '3526', '6213', # AI
+    '6279', '3023', '3003', '2460', '6290', '3501', # 車用
+    '2317', '2392', '5457', '6205', '3092', '2462', '3511', # 消費電
+    '6274', '2009', '2476', '1617' # 上游
+]
+
+def get_today_stock_list_from_fubon():
+    print("🔍 正在從富邦證券抓取今日交易名單...")
+    headers = {"User-Agent": "Mozilla/5.0"}
     try:
-        # 1. 先嘗試上市股票代碼 (加 .TW)
-        ticker = f"{stock_id}.TW"
-        data = yf.download(ticker, period="1d", progress=False)
+        res = requests.get(FUBON_URL, headers=headers, timeout=10)
+        res.encoding = 'big5' 
+        dfs = pd.read_html(StringIO(res.text))
+        target_df = None
+        for df in dfs:
+            if '名稱' in df.columns and '買賣超金額' in df.columns:
+                target_df = df
+                break
+        if target_df is None: return []
+
+        stock_data = []
+        for index, row in target_df.iterrows():
+            try:
+                raw_id = str(row[0]).strip()
+                if not (raw_id.isdigit() and len(raw_id) >= 4): continue
+                
+                stock_id = raw_id
+                stock_name = str(row[1]).strip()
+                raw_amt = row['買賣超金額']
+                net_amt_val = int(str(raw_amt).replace(',', ''))
+                
+                stock_data.append({
+                    'id': stock_id,
+                    'name': stock_name,
+                    'net_amt': net_amt_val
+                })
+            except: continue
         
-        if data.empty:
-            # 2. 如果找不到，嘗試上櫃股票代碼 (加 .TWO)
-            ticker = f"{stock_id}.TWO"
-            data = yf.download(ticker, period="1d", progress=False)
-        
-        if not data.empty:
-            price = data['Close'].iloc[-1]
-            return float(price)
-        else:
-            return None 
-            
+        seen = set()
+        unique_stocks = []
+        for s in stock_data:
+            if s['id'] not in seen:
+                unique_stocks.append(s)
+                seen.add(s['id'])
+        return unique_stocks
     except Exception as e:
-        # print(f"股價查詢失敗 ({stock_id}): {e}") # 保持版面乾淨，先不印錯誤
+        print(f"❌ 富邦爬取失敗: {e}")
+        return []
+
+def get_close_price_fallback(stock_id):
+    """一般模式：使用 yfinance 抓取今日收盤價"""
+    try:
+        stock = yf.Ticker(f"{stock_id}.TW")
+        hist = stock.history(period="1d")
+        if not hist.empty:
+            return float(hist.iloc[-1]['Close'])
+        return 0.0
+    except:
+        return 0.0
+
+def get_histock_details(stock_id):
+    """精準模式：爬取 HiStock 真實成本"""
+    url = f"https://histock.tw/stock/brokertrace.aspx?bno={BROKER_ID}&no={stock_id}"
+    cookie_val = os.environ.get("HISTOCK_COOKIE", "")
+    headers = {
+        "User-Agent": "Mozilla/5.0",
+        "Cookie": cookie_val
+    }
+
+    try:
+        time.sleep(random.uniform(1.0, 3.0)) # 只有監控名單會跑這裡，延遲可以保留
+        response = requests.get(url, headers=headers, timeout=10)
+        if response.status_code != 200: return None
+
+        dfs = pd.read_html(StringIO(response.text))
+        target_df = None
+        for df in dfs:
+            if "買進均價" in df.columns and "日期" in df.columns:
+                target_df = df
+                break
+        if target_df is None: return None
+
+        latest_row = target_df.iloc[0]
+        date_str = latest_row["日期"].replace("/", "-")
+        
+        buy_vol = pd.to_numeric(latest_row["買進張數"], errors='coerce')
+        buy_avg = pd.to_numeric(latest_row["買進均價"], errors='coerce')
+        sell_vol = pd.to_numeric(latest_row["賣出張數"], errors='coerce')
+        sell_avg = pd.to_numeric(latest_row["賣出均價"], errors='coerce')
+        close_price = pd.to_numeric(latest_row["收盤價"], errors='coerce')
+
+        net_vol = int(buy_vol - sell_vol)
+        total_buy_val = buy_vol * buy_avg
+        total_sell_val = sell_vol * sell_avg
+        net_amount = total_buy_val - total_sell_val
+        
+        real_cost = 0.0
+        if net_vol != 0:
+            real_cost = round((net_amount / net_vol), 1)
+        else:
+            real_cost = close_price
+
+        net_amount_k = int(net_amount / 1000)
+        return {
+            'date': date_str,
+            'net_vol': net_vol,
+            'cost': real_cost,
+            'net_amt_k': net_amount_k
+        }
+    except Exception as e:
+        print(f"   ⚠️ HiStock 異常 ({stock_id}): {e}")
         return None
 
-def crawl_and_save():
-    # 1. 設定日期
-    # 若要上線自動跑當天，請用這行：
-    today = datetime.date.today().strftime('%Y-%m-%d')
-    # 若要測試特定日期 (例如昨天)，請用這行：
-    #today = "2025-12-02"
-    
-    print(f"[{today}] 開始執行爬蟲與計算任務 (精簡版)...")
-
-    target_url = f"{BASE_URL}&e={today}&f={today}"
-    headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'}
-
-    try:
-        response = requests.get(target_url, headers=headers, verify=False)
-        response.encoding = 'cp950'
-        raw_text = response.text
-
-        print("連線成功，正在抓取資料...")
-        
-        # 正規表達式 (抓取 ID, 名稱, 買進, 賣出, 差額)
-        pattern = r"GenLink2stk\('([A-Z0-9]+)','([^']+)'\);[\s\S]*?>([-0-9,]+)<[\s\S]*?>([-0-9,]+)<[\s\S]*?>([-0-9,]+)<"
-        matches = re.findall(pattern, raw_text)
-        
-        if not matches:
-            print("❌ 找不到資料，可能是今日休市。")
+def update_google_sheet(new_rows):
+    scope = ["https://spreadsheets.google.com/feeds", 'https://www.googleapis.com/auth/drive']
+    if not os.path.exists(JSON_FILE_NAME):
+        if "GCP_CREDENTIALS" in os.environ:
+            with open(JSON_FILE_NAME, "w") as f:
+                f.write(os.environ["GCP_CREDENTIALS"])
+        else:
+            print("❌ 找不到 service_account.json")
             return
 
-        print(f"🔍 抓到 {len(matches)} 筆資料，開始計算股價與張數...")
-
-        cleaned_data = []
-        for i, m in enumerate(matches):
-            stock_id = m[0].replace('AS', '')
-            stock_name = m[1]
-            
-            # 我們只需要計算 買賣超金額 (net_amt)
-            # m[2]=買進, m[3]=賣出 (這兩個這次不存), m[4]=差額
-            net_amt = int(m[4].replace(',', ''))
-            
-            # --- 判斷買賣別 ---
-            if net_amt > 0:
-                status = "買超"
-            elif net_amt < 0:
-                status = "賣超"
-            else:
-                status = "平"
-
-            # --- 查詢收盤價 ---
-            price = get_stock_price(stock_id, today)
-            
-            # --- 換算張數 (取整數) ---
-            # 公式：金額(千元) / 收盤價 = 張數
-            estimated_sheets = 0
-            if price and price > 0:
-                # 使用 round 四捨五入，再用 int 轉成整數
-                estimated_sheets = int(round(net_amt / price, 0))
-            else:
-                estimated_sheets = "N/A"
-
-            # 顯示進度
-            if (i + 1) % 10 == 0:
-                print(f"已處理 {i + 1}/{len(matches)} 筆...")
-
-            # 整理資料列 (移除了買進/賣出金額)
-            row = [
-                today,            # 日期
-                stock_id,         # 代號
-                stock_name,       # 名稱
-                status,           # 買賣別
-                net_amt,          # 買賣超金額(千)
-                price if price else "查無", # 收盤價
-                estimated_sheets  # 估算張數(整數)
-            ]
-            cleaned_data.append(row)
-
-        # 寫入 Google Sheet
-        print("正在寫入 Google Sheet...")
-        scope = ["https://spreadsheets.google.com/feeds", 'https://www.googleapis.com/auth/drive']
+    try:
         creds = ServiceAccountCredentials.from_json_keyfile_name(JSON_FILE_NAME, scope)
         client = gspread.authorize(creds)
         sheet = client.open(SHEET_NAME).sheet1
         
-        # 檢查標題列 (若為空則寫入新標題)
-        if len(sheet.get_all_values()) == 0:
-            header = ["日期", "代號", "名稱", "買賣別", "買賣超金額(千)", "收盤價", "估算張數"]
-            sheet.append_row(header)
-
-        sheet.append_rows(cleaned_data)
-        print(f"🎉 成功！已將 {len(cleaned_data)} 筆精簡資料寫入試算表！")
-
+        existing_data = sheet.get_all_values()
+        existing_keys = set()
+        if len(existing_data) > 1:
+            for row in existing_data[1:]:
+                if len(row) >= 2: existing_keys.add(f"{row[0]}_{row[1]}")
+        
+        rows_to_append = []
+        for row in new_rows:
+            key = f"{row[0]}_{row[1]}"
+            if key not in existing_keys: rows_to_append.append(row)
+        
+        if rows_to_append:
+            sheet.append_rows(rows_to_append)
+            print(f"✅ 成功寫入 {len(rows_to_append)} 筆資料！")
+        else:
+            print("⚠️ 無新資料需寫入。")
     except Exception as e:
-        print(f"❌ 發生錯誤: {e}")
+        print(f"❌ 寫入失敗: {e}")
+
+def main():
+    print("🚀 啟動混合式爬蟲 (Watchlist 精準 / 其他 估算)...")
+    stock_list = get_today_stock_list_from_fubon()
+    if not stock_list: return
+
+    all_data = []
+    today_str = datetime.date.today().strftime('%Y-%m-%d')
+    print(f"📝 準備分析 {len(stock_list)} 檔股票...")
+    
+    for i, stock_info in enumerate(stock_list):
+        stock_id = stock_info['id']
+        stock_name = stock_info['name']
+        fubon_net_amt = stock_info['net_amt']
+        
+        print(f"[{i+1}/{len(stock_list)}] 分析 {stock_name} ({stock_id})...", end="\r")
+        
+        # 核心邏輯分支
+        if stock_id in WATCHLIST:
+            # 策略 A: 監控名單 -> 爬 HiStock 抓真實成本
+            data = get_histock_details(stock_id)
+            if data:
+                row_data = [data['date'], stock_id, stock_name, data['net_amt_k'], data['cost'], data['net_vol']]
+            else:
+                # 備援: 監控名單但 HiStock 失敗 -> 降級為估算
+                net_amt_k = int(fubon_net_amt / 1000)
+                close = get_close_price_fallback(stock_id)
+                est_vol = int(net_amt_k / close) if close > 0 else 0
+                row_data = [today_str, stock_id, stock_name, net_amt_k, close, est_vol]
+        else:
+            # 策略 B: 非監控名單 -> 直接用富邦+yfinance 估算
+            net_amt_k = int(fubon_net_amt / 1000)
+            close = get_close_price_fallback(stock_id)
+            est_vol = int(net_amt_k / close) if close > 0 else 0
+            row_data = [today_str, stock_id, stock_name, net_amt_k, close, est_vol]
+
+        all_data.append(row_data)
+        
+    print(f"\n✅ 分析完成，共 {len(all_data)} 筆。")
+    if all_data:
+        all_data.sort(key=lambda x: x[0], reverse=True)
+        update_google_sheet(all_data)
 
 if __name__ == "__main__":
-    crawl_and_save()
+    main()
