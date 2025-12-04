@@ -8,13 +8,10 @@ from linebot import LineBotApi
 from linebot.models import TextSendMessage
 import warnings
 import yfinance as yf
-import yfinance as yf
 
-# 忽略警告
 # 忽略警告
 warnings.filterwarnings("ignore", category=UserWarning)
 
-# --- 設定區 ---
 # --- 設定區 ---
 SHEET_NAME = "Stock_Data"
 JSON_FILE_NAME = "service_account.json"
@@ -36,7 +33,6 @@ if (not LINE_ACCESS_TOKEN or not LINE_USER_ID) and os.path.exists(LINE_SECRET_FI
 # --- 監控名單 ---
 WATCHLIST = {
     # 🚀 AI 與高速傳輸
-    '3450': {'name': '聯鈞', 'category': '🚀 AI/高速傳輸'},
     '3450': {'name': '聯鈞', 'category': '🚀 AI/高速傳輸'},
     '3689': {'name': '湧德', 'category': '🚀 AI/高速傳輸'},
     '3533': {'name': '嘉澤', 'category': '🚀 AI/高速傳輸'},
@@ -96,7 +92,6 @@ def get_market_data(stock_id, target_date_str):
 def send_line_notify():
     if not LINE_ACCESS_TOKEN or not LINE_USER_ID:
         print("❌ 錯誤：找不到 LINE 金鑰。")
-        print("❌ 錯誤：找不到 LINE 金鑰。")
         return
 
     # 連線 Google Sheet
@@ -130,7 +125,6 @@ def send_line_notify():
         target_date = df["日期"].max().date()
         print(f"⚠️ 今日無資料，改用最新日期: {target_date}")
 
-    target_date_str = target_date.strftime('%Y-%m-%d')
     target_date_str = target_date.strftime('%Y-%m-%d')
     daily_data = df[df["日期"].dt.date == target_date].copy()
 
@@ -172,7 +166,6 @@ def send_line_notify():
                 'id': stock_id,
                 'name': stock_info['name'],
                 'category': stock_info['category'],
-                'price_display': price_display,
                 'price_display': price_display,
                 'trend': trend_icon,
                 'sheets': est_sheets,
