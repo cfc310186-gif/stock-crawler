@@ -3,6 +3,6 @@ requests
 gspread
 oauth2client
 yfinance
-streamlit
+streamlit>=1.40.0
 plotly
 line-bot-sdk
