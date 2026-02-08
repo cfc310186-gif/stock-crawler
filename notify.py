@@ -42,6 +42,7 @@ WATCHLIST = {
     '6197': {'name': '佳必琪', 'category': '🚀 AI/高速傳輸'},
     '3526': {'name': '凡甲', 'category': '🚀 AI/高速傳輸'},
     '6213': {'name': '聯茂', 'category': '🚀 AI/高速傳輸'},
+    '3581': {'name': '博磊', 'category': '🚀 AI/高速傳輸'},
     # 🚗 車用與工控
     '6279': {'name': '胡連', 'category': '🚗 車用/工控'},
     '3023': {'name': '信邦', 'category': '🚗 車用/工控'},
