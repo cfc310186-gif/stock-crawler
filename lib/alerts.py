@@ -157,7 +157,7 @@ def compute_rankings(
     top_n: int,
     watchlist_ids: set[str] | None = None,
 ) -> list[dict]:
-    """計算「近 N 日買/賣超前 M 大」— 僅考慮 watchlist 內股票"""
+    """計算「近 N 日買/賣超前 M 大」— 預設對全 Sheet；傳入 watchlist_ids 則過濾到該集合。"""
     if metric not in {"net_sheets", "net_amount_k"}:
         return []
 

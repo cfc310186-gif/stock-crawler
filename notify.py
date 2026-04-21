@@ -124,8 +124,6 @@ def build_message(df_full, target_date, watchlist, alert_rules):
     if daily_df.empty:
         return None
 
-    watchlist_ids = set(watchlist.keys())
-
     # --- (A) 組 watchlist 每檔的基本資料 + condition 規則命中 ---
     hits_per_stock = []
     condition_hits_grouped: dict[str, list[AlertHit]] = {}
@@ -191,12 +189,11 @@ def build_message(df_full, target_date, watchlist, alert_rules):
 
     hits_per_stock.sort(key=lambda x: abs(x['amount']), reverse=True)
 
-    # --- (B) 跑 ranking 規則 ---
+    # --- (B) 跑 ranking 規則 (對全 Sheet，不限 watchlist) ---
     ranking_results = evaluate_rankings(
         df_full=df_full,
         target_date=target_ts,
         rules=alert_rules,
-        watchlist_ids=watchlist_ids,
     )
 
     # --- (C) 組訊息 ---
