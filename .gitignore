@@ -206,3 +206,13 @@ marimo/_static/
 marimo/_lsp/
 __marimo__/
 line_secret.json
+
+# 專案原始碼 (覆蓋前面 Python 模板中的 lib/ 排除)
+!/lib/
+!/lib/**
+# 重新排除快取 (不要被 !/lib/** 帶回來)
+lib/__pycache__/
+lib/**/__pycache__/
+
+# 執行階段進度檔
+.progress.json

@@ -1,0 +1,56 @@
+# 通知告警規則
+#
+# 兩種規則類型：
+#   - condition  : 單檔股票條件命中 (e.g. 集中度 >= 5)
+#   - ranking    : 跨全名單排行 (e.g. 近 3 日買超前 3 大)
+#
+# condition 可用變數 (型別皆為 int/float)：
+#   net_sheets            : 當日淨張數 (正=買超 / 負=賣超)
+#   net_amount_k          : 當日淨買賣超金額 (千)
+#   concentration         : 當日集中度 (%)
+#   market_price          : 當日市價
+#   avg_cost              : 主力成本 (Sheet 收盤價欄位)
+#   consecutive_buy_days  : 截至當日連續買超天數
+#   consecutive_sell_days : 截至當日連續賣超天數
+#
+# condition.when 會以 restricted eval 執行，僅允許上述變數與基本算術/比較。
+#
+# ranking 參數：
+#   window_days : 回看幾個交易日
+#   metric      : net_sheets | net_amount_k
+#   direction   : buy (取正向前 N) / sell (取負向前 N)
+#   top_n       : 取前幾名
+#
+# 任一規則可以用 enabled: false 暫時停用。
+
+alerts:
+  - name: "高集中度買盤"
+    kind: condition
+    when: "concentration >= 5 and net_sheets > 0"
+    emoji: "🔥"
+
+  - name: "連續買超 ≥ 3 日"
+    kind: condition
+    when: "consecutive_buy_days >= 3"
+    emoji: "⚡"
+
+  - name: "跌破主力成本 3%"
+    kind: condition
+    when: "market_price > 0 and avg_cost > 0 and market_price < avg_cost * 0.97"
+    emoji: "⚠️"
+
+  - name: "近 3 日買超前 3 大"
+    kind: ranking
+    window_days: 3
+    metric: net_sheets
+    direction: buy
+    top_n: 3
+    emoji: "🏆"
+
+  - name: "近 3 日賣超前 3 大"
+    kind: ranking
+    window_days: 3
+    metric: net_sheets
+    direction: sell
+    top_n: 3
+    emoji: "🧊"

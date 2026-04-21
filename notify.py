@@ -9,13 +9,17 @@ from linebot.models import TextSendMessage
 import warnings
 import yfinance as yf
 
-# 忽略警告
+from settings import SHEET_NAME, JSON_FILE_NAME, LINE_SECRET_FILE
+from lib.watchlist import load_watchlist
+from lib.alerts import (
+    AlertHit,
+    evaluate_conditions,
+    evaluate_rankings,
+    load_alerts,
+)
+
 warnings.filterwarnings("ignore", category=UserWarning)
 
-# --- 設定區 ---
-SHEET_NAME = "Stock_Data"
-JSON_FILE_NAME = "service_account.json"
-LINE_SECRET_FILE = "line_secret.json"
 
 LINE_ACCESS_TOKEN = os.environ.get("LINE_ACCESS_TOKEN")
 LINE_USER_ID = os.environ.get("LINE_USER_ID")
@@ -30,175 +34,265 @@ if (not LINE_ACCESS_TOKEN or not LINE_USER_ID) and os.path.exists(LINE_SECRET_FI
     except Exception as e:
         print(f"⚠️ 讀取 line_secret.json 失敗: {e}")
 
-# --- 監控名單 ---
-WATCHLIST = {
-    # 🚀 AI 與高速傳輸
-    '3450': {'name': '聯鈞', 'category': '🚀 AI/高速傳輸'},
-    '3689': {'name': '湧德', 'category': '🚀 AI/高速傳輸'},
-    '3533': {'name': '嘉澤', 'category': '🚀 AI/高速傳輸'},
-    '3665': {'name': '貿聯-KY', 'category': '🚀 AI/高速傳輸'},
-    '3605': {'name': '宏致', 'category': '🚀 AI/高速傳輸'},
-    '3217': {'name': '優群', 'category': '🚀 AI/高速傳輸'},
-    '6197': {'name': '佳必琪', 'category': '🚀 AI/高速傳輸'},
-    '3526': {'name': '凡甲', 'category': '🚀 AI/高速傳輸'},
-    '6213': {'name': '聯茂', 'category': '🚀 AI/高速傳輸'},
-    '3581': {'name': '博磊', 'category': '🚀 AI/高速傳輸'},
-    # 🚗 車用與工控
-    '6279': {'name': '胡連', 'category': '🚗 車用/工控'},
-    '3023': {'name': '信邦', 'category': '🚗 車用/工控'},
-    '3003': {'name': '健和興', 'category': '🚗 車用/工控'},
-    '2460': {'name': '建通', 'category': '🚗 車用/工控'},
-    '6290': {'name': '良維', 'category': '🚗 車用/工控'},
-    '3501': {'name': '維熹', 'category': '🚗 車用/工控'},
-    # 💻 消費性電子
-    '2317': {'name': '鴻海', 'category': '💻 消費電子'},
-    '2392': {'name': '正崴', 'category': '💻 消費電子'},
-    '5457': {'name': '宣德', 'category': '💻 消費電子'},
-    '6205': {'name': '詮欣', 'category': '💻 消費電子'},
-    '3092': {'name': '鴻碩', 'category': '💻 消費電子'},
-    '2462': {'name': '良得電', 'category': '💻 消費電子'},
-    '3511': {'name': '矽瑪', 'category': '💻 消費電子'},
-    # ⚙️ 上游材料
-    '6274': {'name': '台燿', 'category': '⚙️ 上游材料'},
-    '2009': {'name': '第一銅', 'category': '⚙️ 上游材料'},
-    '2476': {'name': '鉅祥', 'category': '⚙️ 上游材料'},
-    '1617': {'name': '榮星', 'category': '⚙️ 上游材料'}
-}
 
 def get_market_data(stock_id, target_date_str):
-    """取得當日收盤價、漲跌幅、總成交量"""
+    """取得當日收盤價、漲跌幅、總成交量。失敗回傳 None，代表 yfinance 無資料。"""
     try:
         stock = yf.Ticker(f"{stock_id}.TW")
         hist = stock.history(period="1mo")
+        if hist.empty:
+            return None
         hist.index = hist.index.strftime('%Y-%m-%d')
-        
-        if target_date_str in hist.index:
-            target_idx = hist.index.get_loc(target_date_str)
-            total_vol = int(hist.iloc[target_idx]['Volume'] / 1000)
-            close_price = hist.iloc[target_idx]['Close'] # 當日市價
-            
-            if target_idx > 0:
-                prev_close = hist.iloc[target_idx - 1]['Close']
-                pct_change = round(((close_price - prev_close) / prev_close) * 100, 2)
-            else:
-                pct_change = 0.0
-                
-            return close_price, pct_change, total_vol
+
+        if target_date_str not in hist.index:
+            return None
+
+        target_idx = hist.index.get_loc(target_date_str)
+        total_vol = int(hist.iloc[target_idx]['Volume'] / 1000)
+        close_price = float(hist.iloc[target_idx]['Close'])
+
+        if target_idx > 0:
+            prev_close = float(hist.iloc[target_idx - 1]['Close'])
+            pct_change = round(((close_price - prev_close) / prev_close) * 100, 2)
         else:
-            return 0, 0, 0
+            pct_change = 0.0
+
+        return close_price, pct_change, total_vol
     except Exception as e:
         print(f"⚠️ yfinance 失敗 ({stock_id}): {e}")
-        return 0, 0, 0
+        return None
 
-def send_line_notify():
-    if not LINE_ACCESS_TOKEN or not LINE_USER_ID:
-        print("❌ 錯誤：找不到 LINE 金鑰。")
-        return
 
-    # 連線 Google Sheet
+def _load_sheet_df():
     scope = ["https://spreadsheets.google.com/feeds", 'https://www.googleapis.com/auth/drive']
-    if os.path.exists(JSON_FILE_NAME):
-        creds = ServiceAccountCredentials.from_json_keyfile_name(JSON_FILE_NAME, scope)
-    else:
+    if not os.path.exists(JSON_FILE_NAME):
         print("❌ 找不到 service_account.json")
-        return
+        return None
 
+    creds = ServiceAccountCredentials.from_json_keyfile_name(JSON_FILE_NAME, scope)
     client = gspread.authorize(creds)
     sheet = client.open(SHEET_NAME).sheet1
     data = sheet.get_all_values()
-    
     if not data:
-        print("⚠️ 試算表無資料")
-        return
+        return None
 
     headers = data[0]
     rows = data[1:]
     df = pd.DataFrame(rows, columns=headers)
-    
-    # 讀取 Sheet 時，請注意：對於 Watchlist 股票，'收盤價' 欄位其實是 '真實成本'
-    # 對於非 Watchlist 股票，'收盤價' 欄位就是 '收盤價'
-    
+
+    for col in ["買賣超金額(千)", "收盤價", "估算張數"]:
+        if col in df.columns:
+            df[col] = pd.to_numeric(
+                df[col].astype(str).str.replace(',', ''), errors='coerce'
+            ).fillna(0)
+
     df["日期"] = pd.to_datetime(df["日期"])
-    today_date = datetime.date.today()
-    if not df[df["日期"].dt.date == today_date].empty:
-        target_date = today_date
-    else:
-        target_date = df["日期"].max().date()
-        print(f"⚠️ 今日無資料，改用最新日期: {target_date}")
+    df["代號"] = df["代號"].astype(str)
+    return df
 
+
+def _format_number_signed(value):
+    return f"+{value:,}" if value > 0 else f"{value:,}"
+
+
+def _format_ranking_block(rule_name, payload):
+    """將 ranking 規則結果格式化成一段訊息"""
+    emoji = payload["emoji"]
+    records = payload["records"]
+    metric = payload["metric"]
+    unit = "張" if metric == "net_sheets" else "千"
+
+    lines = [f"{emoji} {rule_name}"]
+    for i, rec in enumerate(records, 1):
+        stock_id = str(rec["代號"])
+        stock_name = rec["名稱"]
+        total = int(rec["total"])
+        lines.append(f"  {i}. {stock_name} ({stock_id})  {_format_number_signed(total)} {unit}")
+    return "\n".join(lines)
+
+
+def _format_condition_group(hits_by_rule):
+    """把 condition 命中按規則名稱分組後的結果格式化"""
+    blocks = []
+    for rule_name, hits in hits_by_rule.items():
+        emoji = hits[0].emoji
+        lines = [f"{emoji} {rule_name}"]
+        for h in hits:
+            detail_bits = []
+            conc = h.extra.get("concentration", 0)
+            if conc:
+                detail_bits.append(f"集中 {conc}%")
+            streak_b = h.extra.get("consecutive_buy_days", 0)
+            streak_s = h.extra.get("consecutive_sell_days", 0)
+            if streak_b >= 2:
+                detail_bits.append(f"連買 {streak_b} 日")
+            if streak_s >= 2:
+                detail_bits.append(f"連賣 {streak_s} 日")
+            mp = h.extra.get("market_price", 0)
+            ac = h.extra.get("avg_cost", 0)
+            if mp and ac:
+                detail_bits.append(f"市價 {mp} / 成本 {ac}")
+            detail = " | ".join(detail_bits) if detail_bits else ""
+            suffix = f"  ({detail})" if detail else ""
+            lines.append(f"  {h.stock_name} ({h.stock_id}){suffix}")
+        blocks.append("\n".join(lines))
+    return blocks
+
+
+def build_message(df_full, target_date, watchlist, alert_rules):
+    """組出完整通知訊息。若今日沒有任何可發內容回傳 None。"""
     target_date_str = target_date.strftime('%Y-%m-%d')
-    daily_data = df[df["日期"].dt.date == target_date].copy()
+    target_ts = pd.Timestamp(target_date)
 
-    hits = []
-    print(f"🔍 開始分析 {target_date} 資料 (讀取 Sheet 成本)...")
+    daily_df = df_full[df_full["日期"] == target_ts]
+    if daily_df.empty:
+        return None
 
-    for idx, row in daily_data.iterrows():
+    watchlist_ids = set(watchlist.keys())
+
+    # --- (A) 組 watchlist 每檔的基本資料 + condition 規則命中 ---
+    hits_per_stock = []
+    condition_hits_grouped: dict[str, list[AlertHit]] = {}
+
+    for _, row in daily_df.iterrows():
         stock_id = str(row['代號'])
-        if stock_id in WATCHLIST:
-            # 從 Sheet 讀取 (已經是 main.py 算好的結果)
-            net_amt = int(row['買賣超金額(千)'].replace(',', ''))
-            est_sheets = int(row['估算張數'].replace(',', '')) # 其實是真實淨張數
-            sheet_cost_val = float(row['收盤價'].replace(',', '')) # 這是主力成本
-            
-            stock_info = WATCHLIST[stock_id]
-            
-            # 1. 取得今日市價行情 (yfinance)
-            # 因為 Sheet 裡存的是成本，我們要另外抓市價來比較
-            market_price, pct_change, total_vol = get_market_data(stock_id, target_date_str)
-            
-            # 如果 yfinance 抓不到 (假日或盤中)，市價暫時用成本價代替顯示，或顯示 N/A
-            if market_price == 0: market_price = sheet_cost_val
+        if stock_id not in watchlist:
+            continue
 
-            # 2. 集中度計算
-            concentration = 0.0
-            if total_vol > 0:
-                concentration = round((est_sheets / total_vol) * 100, 1)
-            
-            # 3. 準備顯示字串
+        net_amt = int(row['買賣超金額(千)'])
+        est_sheets = int(row['估算張數'])
+        sheet_cost_val = float(row['收盤價'])
+        info = watchlist[stock_id]
+
+        market_tuple = get_market_data(stock_id, target_date_str)
+        if market_tuple is None:
+            market_price = 0.0
+            pct_change = 0.0
+            total_vol = 0
+            price_display = "⚠️ 無法取得股價"
+        else:
+            market_price, pct_change, total_vol = market_tuple
             if pct_change != 0:
                 pct_str = f"+{pct_change}%" if pct_change > 0 else f"{pct_change}%"
                 price_display = f"{market_price} ({pct_str})"
             else:
                 price_display = f"{market_price}"
 
-            trend_icon = "🔴" if net_amt > 0 else "🟢"
-            
-            hits.append({
-                'id': stock_id,
-                'name': stock_info['name'],
-                'category': stock_info['category'],
-                'price_display': price_display,
-                'trend': trend_icon,
-                'sheets': est_sheets,
-                'amount': net_amt,
-                'concentration': concentration,
-                'cost': sheet_cost_val # 直接用 Sheet 裡的數值
-            })
+        concentration = 0.0
+        if total_vol > 0:
+            concentration = round((est_sheets / total_vol) * 100, 1)
 
-    if not hits:
-        print("✅ 今日無供應鏈股票動態，不發送。")
+        trend_icon = "🔴" if net_amt > 0 else "🟢"
+
+        hits_per_stock.append({
+            'id': stock_id,
+            'name': info['name'],
+            'category': info['category'],
+            'category_display': info['category_display'],
+            'price_display': price_display,
+            'trend': trend_icon,
+            'sheets': est_sheets,
+            'amount': net_amt,
+            'concentration': concentration,
+            'cost': sheet_cost_val,
+        })
+
+        # 跑 condition 規則
+        cond_hits = evaluate_conditions(
+            df_full=df_full,
+            stock_id=stock_id,
+            stock_name=info['name'],
+            target_date=target_ts,
+            market_price=market_price,
+            concentration=concentration,
+            rules=alert_rules,
+        )
+        for h in cond_hits:
+            condition_hits_grouped.setdefault(h.rule_name, []).append(h)
+
+    if not hits_per_stock:
+        return None
+
+    hits_per_stock.sort(key=lambda x: abs(x['amount']), reverse=True)
+
+    # --- (B) 跑 ranking 規則 ---
+    ranking_results = evaluate_rankings(
+        df_full=df_full,
+        target_date=target_ts,
+        rules=alert_rules,
+        watchlist_ids=watchlist_ids,
+    )
+
+    # --- (C) 組訊息 ---
+    SEP = "----------------------"
+    HEADER = "======================"
+
+    parts = [f"【連接器供應鏈】主力動向", f"📅 {target_date_str}"]
+
+    if ranking_results or condition_hits_grouped:
+        parts.append(HEADER)
+        parts.append("🔥 重點告警")
+        parts.append(HEADER)
+
+        for rule_name, payload in ranking_results.items():
+            parts.append(_format_ranking_block(rule_name, payload))
+            parts.append(SEP)
+
+        for block in _format_condition_group(condition_hits_grouped):
+            parts.append(block)
+            parts.append(SEP)
+
+    parts.append(HEADER)
+    parts.append("📋 一般動向")
+    parts.append(HEADER)
+
+    for h in hits_per_stock:
+        sheet_str = _format_number_signed(h['sheets'])
+        parts.append(h['category_display'])
+        parts.append(f"{h['trend']} {h['name']} ({h['id']})")
+        parts.append(f"張數: {sheet_str} 張")
+        parts.append(f"集中: {h['concentration']}%")
+        parts.append(f"成本: {h['cost']}")
+        parts.append(f"金額: {h['amount']:,} 千")
+        parts.append(f"股價: {h['price_display']}")
+        parts.append(SEP)
+
+    parts.append("詳細分析請看 App")
+    return "\n".join(parts)
+
+
+def send_line_notify():
+    if not LINE_ACCESS_TOKEN or not LINE_USER_ID:
+        print("❌ 錯誤：找不到 LINE 金鑰。")
         return
 
-    hits.sort(key=lambda x: abs(x['amount']), reverse=True)
+    watchlist = load_watchlist()
+    if not watchlist:
+        print("⚠️ Watchlist 為空，請檢查 config/watchlist.yaml")
+        return
 
-    # 組合訊息
-    message = f"【連接器供應鏈】主力動向\n"
-    message += f"📅 {target_date}\n"
-    message += "----------------------\n"
+    alert_rules = load_alerts()
 
-    for h in hits:
-        sheet_str = f"+{h['sheets']}" if h['sheets'] > 0 else f"{h['sheets']}"
-        
-        message += f"{h['category']}\n"
-        message += f"{h['trend']} {h['name']} ({h['id']})\n"
-        message += f"張數: {sheet_str} 張\n"
-        message += f"集中: {h['concentration']}%\n"
-        message += f"成本: {h['cost']}\n"
-        message += f"金額: {h['amount']:,} 千\n"
-        message += f"股價: {h['price_display']}\n"
-        message += "----------------------\n"
+    df = _load_sheet_df()
+    if df is None:
+        print("⚠️ 試算表無資料")
+        return
 
-    message += "詳細分析請看 App"
+    today_date = datetime.date.today()
+    today_ts = pd.Timestamp(today_date)
+
+    if not df[df["日期"] == today_ts].empty:
+        target_date = today_date
+    else:
+        target_date = df["日期"].max().date()
+        print(f"⚠️ 今日無資料，改用最新日期: {target_date}")
+
+    print(f"🔍 開始分析 {target_date} 資料 (讀取 Sheet 成本)...")
+
+    message = build_message(df, target_date, watchlist, alert_rules)
+    if not message:
+        print("✅ 今日無供應鏈股票動態，不發送。")
+        return
 
     try:
         line_bot_api = LineBotApi(LINE_ACCESS_TOKEN)
@@ -206,6 +300,7 @@ def send_line_notify():
         print("🎉 LINE 通知發送成功！")
     except Exception as e:
         print(f"❌ 發送失敗: {e}")
+
 
 if __name__ == "__main__":
     send_line_notify()

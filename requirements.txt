@@ -6,3 +6,4 @@ yfinance
 streamlit>=1.40.0
 plotly
 line-bot-sdk
+PyYAML

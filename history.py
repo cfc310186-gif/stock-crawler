@@ -4,13 +4,12 @@ from oauth2client.service_account import ServiceAccountCredentials
 import datetime
 from datetime import timedelta
 import urllib3
-import re 
+import re
 import time
 import yfinance as yf
 
-# --- 設定區 ---
-SHEET_NAME = "Stock_Data"
-JSON_FILE_NAME = "service_account.json"
+from settings import SHEET_NAME, JSON_FILE_NAME
+
 BASE_URL = "https://fubon-ebrokerdj.fbs.com.tw/z/zg/zgb/zgb0.djhtm?a=9A00&b=0039004100390031&c=B"
 DAYS_TO_CRAWL = 30  # 要往回抓幾天
 

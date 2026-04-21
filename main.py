@@ -1,4 +1,4 @@
-print("✅ 正在執行 main.py [v18.0 上市上櫃通吃版]")
+print("✅ 正在執行 main.py [v19.0 設定集中化版]")
 
 import requests
 import pandas as pd
@@ -13,34 +13,23 @@ import re
 import sys
 from io import StringIO
 
-# --- 設定區 ---
-SHEET_NAME = "Stock_Data"
-JSON_FILE_NAME = "service_account.json"
-BROKER_ID = "9A91" 
+from settings import SHEET_NAME, JSON_FILE_NAME
 
 # --- 📅 日期檢查與設定 ---
 def check_and_get_date():
     today = datetime.date.today()
     weekday = today.weekday() # 0=週一, ..., 5=週六, 6=週日
-    
+
     if weekday == 5 or weekday == 6:
         day_str = "週六" if weekday == 5 else "週日"
         print(f"😴 今天是 {today} ({day_str})，股市不開盤，程式自動休眠。")
         sys.exit(0) # 正常結束
-    
+
     return today.strftime('%Y-%m-%d')
 
 TARGET_DATE_STR = check_and_get_date()
 #TARGET_DATE_STR = "2025-12-8"
 print(f"📅 目標日期: {TARGET_DATE_STR}")
-
-# --- 監控名單 ---
-WATCHLIST = [
-    '3450', '3689', '3533', '3665', '3605', '3217', '6197', '3526', '6213',
-    '6279', '3023', '3003', '2460', '6290', '3501',
-    '2317', '2392', '5457', '6205', '3092', '2462', '3511',
-    '6274', '2009', '2476', '1617'
-]
 
 def get_today_stock_list_from_fubon():
     print("🔍 正在從富邦證券抓取交易名單...")

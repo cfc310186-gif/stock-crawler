@@ -1,3 +1,4 @@
+import json
 import pandas as pd
 import gspread
 from oauth2client.service_account import ServiceAccountCredentials
@@ -7,14 +8,34 @@ import time
 import os
 import random
 
-# --- 設定區 ---
-SHEET_NAME = "Stock_Data"
-JSON_FILE_NAME = "service_account.json"
-BROKER_ID = "9A91"  # 永豐金-松山
+from settings import SHEET_NAME, JSON_FILE_NAME, BROKER_ID, PROGRESS_FILE
 
-# 【設定接關點】
-# 如果上次跑到第 50 筆被擋，請將這裡改成 50，程式會跳過前 50 檔
-START_INDEX = 48 
+
+def _load_progress() -> dict:
+    """讀取進度檔；格式 {'last_completed_index': int, 'timestamp': iso}"""
+    if not PROGRESS_FILE.exists():
+        return {}
+    try:
+        with PROGRESS_FILE.open("r", encoding="utf-8") as f:
+            return json.load(f)
+    except Exception as e:
+        print(f"⚠️ 進度檔讀取失敗，從頭開始: {e}")
+        return {}
+
+
+def _save_progress(last_completed_index: int) -> None:
+    PROGRESS_FILE.parent.mkdir(parents=True, exist_ok=True)
+    payload = {
+        "last_completed_index": last_completed_index,
+        "timestamp": pd.Timestamp.now().isoformat(),
+    }
+    with PROGRESS_FILE.open("w", encoding="utf-8") as f:
+        json.dump(payload, f, ensure_ascii=False, indent=2)
+
+
+def _clear_progress() -> None:
+    if PROGRESS_FILE.exists():
+        PROGRESS_FILE.unlink()
 
 # 【Cookie 設定】
 # 請填入您的 HiStock Cookie (三個引號包住)
@@ -110,66 +131,89 @@ def fetch_histock_history(stock_id):
     return {}
 
 def main():
-    print(f"🚀 啟動歷史資料清洗 (從第 {START_INDEX} 筆開始)...")
-    
+    # --- 讀取進度檔 (自動接關) ---
+    progress = _load_progress()
+    start_index = int(progress.get("last_completed_index", -1)) + 1
+    if start_index > 0:
+        print(f"🔁 偵測到上次進度：從第 {start_index} 筆繼續 ({progress.get('timestamp', '?')})")
+    else:
+        print("🚀 啟動歷史資料清洗 (從頭開始)...")
+
     if len(HISTOCK_COOKIE) < 10:
         print("❌ 請填入 Cookie！")
         return
 
     sheet, raw_data = get_google_sheet_data()
-    
+
     if len(raw_data) < 2:
         print("⚠️ Sheet 是空的")
         return
 
     headers = raw_data[0]
     df = pd.DataFrame(raw_data[1:], columns=headers)
-    
+
     unique_stocks = df["代號"].unique()
     print(f"📊 總股票數: {len(unique_stocks)}")
-    
-    # 【關鍵】切片：只處理從 START_INDEX 開始的股票
-    target_stocks = unique_stocks[START_INDEX:]
-    print(f"👉 本次將處理: {len(target_stocks)} 檔 (索引 {START_INDEX} ~ {len(unique_stocks)})")
-    
+
+    if start_index >= len(unique_stocks):
+        print("✅ 所有股票都已處理過，重置進度並從頭開始。若要保留當前進度請移除 .progress.json")
+        _clear_progress()
+        start_index = 0
+
+    target_stocks = unique_stocks[start_index:]
+    print(f"👉 本次將處理: {len(target_stocks)} 檔 (索引 {start_index} ~ {len(unique_stocks)-1})")
+
     total_updated = 0
-    
-    for i, stock_id in enumerate(target_stocks):
-        current_idx = START_INDEX + i
-        print(f"\n[{current_idx}/{len(unique_stocks)}] 處理 {stock_id}", end=" ")
-        
-        hist_data = fetch_histock_history(stock_id)
-        
-        if not hist_data:
-            print("無資料/跳過", end="")
-            continue
-            
-        mask = df["代號"] == stock_id
-        target_indices = df[mask].index
-        
-        match_count = 0
-        for idx_row in target_indices:
-            row_date = pd.to_datetime(df.at[idx_row, "日期"]).strftime('%Y-%m-%d')
-            if row_date in hist_data:
-                new_data = hist_data[row_date]
-                df.at[idx_row, "買賣超金額(千)"] = new_data["net_amt_k"]
-                df.at[idx_row, "收盤價"] = new_data["real_cost"]
-                df.at[idx_row, "估算張數"] = new_data["net_vol"]
-                match_count += 1
-                total_updated += 1
-        
-        print(f"✅ 更新 {match_count} 筆", end=" ")
-        
-        # 每 10 檔存一次 (頻率高一點比較保險)
-        if (i + 1) % 10 == 0:
-            print(f"\n💾 存檔中...", end=" ")
-            try:
-                output_data = [df.columns.values.tolist()] + df.values.tolist()
-                sheet.clear()
-                sheet.update(output_data)
-                print("🆗", end=" ")
-            except Exception as e:
-                print(f"⚠️ 失敗: {e}", end=" ")
+
+    try:
+        for i, stock_id in enumerate(target_stocks):
+            current_idx = start_index + i
+            print(f"\n[{current_idx}/{len(unique_stocks)}] 處理 {stock_id}", end=" ")
+
+            hist_data = fetch_histock_history(stock_id)
+
+            if not hist_data:
+                print("無資料/跳過", end="")
+                _save_progress(current_idx)
+                continue
+
+            mask = df["代號"] == stock_id
+            target_indices = df[mask].index
+
+            match_count = 0
+            for idx_row in target_indices:
+                row_date = pd.to_datetime(df.at[idx_row, "日期"]).strftime('%Y-%m-%d')
+                if row_date in hist_data:
+                    new_data = hist_data[row_date]
+                    df.at[idx_row, "買賣超金額(千)"] = new_data["net_amt_k"]
+                    df.at[idx_row, "收盤價"] = new_data["real_cost"]
+                    df.at[idx_row, "估算張數"] = new_data["net_vol"]
+                    match_count += 1
+                    total_updated += 1
+
+            print(f"✅ 更新 {match_count} 筆", end=" ")
+            _save_progress(current_idx)
+
+            # 每 10 檔存一次 (頻率高一點比較保險)
+            if (i + 1) % 10 == 0:
+                print(f"\n💾 存檔中...", end=" ")
+                try:
+                    output_data = [df.columns.values.tolist()] + df.values.tolist()
+                    sheet.clear()
+                    sheet.update(output_data)
+                    print("🆗", end=" ")
+                except Exception as e:
+                    print(f"⚠️ 失敗: {e}", end=" ")
+    except KeyboardInterrupt:
+        print("\n⏸️ 手動中斷。進度已保存，下次執行將自動接續。")
+        output_data = [df.columns.values.tolist()] + df.values.tolist()
+        try:
+            sheet.clear()
+            sheet.update(output_data)
+            print("✅ 中斷前已寫入 Sheet。")
+        except Exception as e:
+            print(f"⚠️ 中斷寫入失敗: {e}")
+        return
 
     print(f"\n\n🎉 全部完成！共更新 {total_updated} 筆。")
     output_data = [df.columns.values.tolist()] + df.values.tolist()
@@ -177,6 +221,8 @@ def main():
         sheet.clear()
         sheet.update(output_data)
         print("✅ 最終寫入成功！")
+        _clear_progress()
+        print("🧹 已清除進度檔。")
     except Exception as e:
         print(f"❌ 最終寫入失敗: {e}")
 

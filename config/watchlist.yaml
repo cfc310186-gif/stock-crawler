@@ -1,0 +1,45 @@
+# 監控股票清單 (單一資料來源)
+# - main.py 只使用此清單做 reference (目前 main 會抓富邦全部分點，不做過濾)
+# - notify.py 據此決定要發通知的股票與分類
+# - app.py (若整合 Watchlist 管理功能) 會讀寫此檔
+#
+# 可用分類 (category)：AI/高速傳輸、車用/工控、消費電子、上游材料 或自訂
+stocks:
+  # AI/高速傳輸
+  - { id: "3450", name: "聯鈞",   category: "AI/高速傳輸" }
+  - { id: "3689", name: "湧德",   category: "AI/高速傳輸" }
+  - { id: "3533", name: "嘉澤",   category: "AI/高速傳輸" }
+  - { id: "3665", name: "貿聯-KY", category: "AI/高速傳輸" }
+  - { id: "3605", name: "宏致",   category: "AI/高速傳輸" }
+  - { id: "3217", name: "優群",   category: "AI/高速傳輸" }
+  - { id: "6197", name: "佳必琪", category: "AI/高速傳輸" }
+  - { id: "3526", name: "凡甲",   category: "AI/高速傳輸" }
+  - { id: "6213", name: "聯茂",   category: "AI/高速傳輸" }
+  - { id: "3581", name: "博磊",   category: "AI/高速傳輸" }
+  # 車用/工控
+  - { id: "6279", name: "胡連",   category: "車用/工控" }
+  - { id: "3023", name: "信邦",   category: "車用/工控" }
+  - { id: "3003", name: "健和興", category: "車用/工控" }
+  - { id: "2460", name: "建通",   category: "車用/工控" }
+  - { id: "6290", name: "良維",   category: "車用/工控" }
+  - { id: "3501", name: "維熹",   category: "車用/工控" }
+  # 消費電子
+  - { id: "2317", name: "鴻海",   category: "消費電子" }
+  - { id: "2392", name: "正崴",   category: "消費電子" }
+  - { id: "5457", name: "宣德",   category: "消費電子" }
+  - { id: "6205", name: "詮欣",   category: "消費電子" }
+  - { id: "3092", name: "鴻碩",   category: "消費電子" }
+  - { id: "2462", name: "良得電", category: "消費電子" }
+  - { id: "3511", name: "矽瑪",   category: "消費電子" }
+  # 上游材料
+  - { id: "6274", name: "台燿",     category: "上游材料" }
+  - { id: "2009", name: "第一銅",   category: "上游材料" }
+  - { id: "2476", name: "鉅祥",     category: "上游材料" }
+  - { id: "1617", name: "榮星",     category: "上游材料" }
+
+# 分類對應的 emoji (顯示於通知訊息)
+category_emojis:
+  "AI/高速傳輸": "🚀"
+  "車用/工控": "🚗"
+  "消費電子": "💻"
+  "上游材料": "⚙️"
