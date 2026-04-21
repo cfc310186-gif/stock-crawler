@@ -1,6 +1,7 @@
-import os
 import json
-from flask import Flask, request, abort
+import os
+
+from flask import Flask, abort, request
 from linebot import LineBotApi, WebhookHandler
 from linebot.exceptions import InvalidSignatureError
 from linebot.models import MessageEvent, TextMessage, TextSendMessage
@@ -11,7 +12,7 @@ app = Flask(__name__)
 # --- 設定區 ---
 # 1. 讀取原本的 Token (直接讀取 line_secret.json 最快)
 if os.path.exists("line_secret.json"):
-    with open("line_secret.json", "r", encoding="utf-8") as f:
+    with open("line_secret.json", encoding="utf-8") as f:
         secrets = json.load(f)
         LINE_ACCESS_TOKEN = secrets.get("LINE_ACCESS_TOKEN")
 else:
@@ -19,7 +20,7 @@ else:
     exit()
 
 # 2. 【請在此填入】您的 Channel Secret (在 LINE Developers -> Basic settings)
-LINE_CHANNEL_SECRET = "202aee735dea28cb80810b1df857966a" 
+LINE_CHANNEL_SECRET = "202aee735dea28cb80810b1df857966a"
 
 line_bot_api = LineBotApi(LINE_ACCESS_TOKEN)
 handler = WebhookHandler(LINE_CHANNEL_SECRET)
@@ -62,7 +63,7 @@ if __name__ == "__main__":
     try:
         # 開啟 5000 port
         public_url = ngrok.connect(5000).public_url
-        print(f"\n👉 【重要】請複製這個網址 (Webhook URL):")
+        print("\n👉 【重要】請複製這個網址 (Webhook URL):")
         print(f"{public_url}/callback")
         print("\n請將上方網址貼到 LINE Developers -> Messaging API -> Webhook URL 欄位並啟用！\n")
         app.run(port=5000)

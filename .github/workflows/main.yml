@@ -21,7 +21,10 @@ jobs:
 
     - name: Install dependencies
       run: |
-        pip install -r requirements.txt
+        pip install -r requirements-dev.txt
+
+    - name: Smoke test (parser fixtures)
+      run: pytest tests/test_parsers.py -q
 
     - name: Create Key File
       run: |

@@ -29,7 +29,7 @@ LINE_USER_ID = os.environ.get("LINE_USER_ID")
 
 if (not LINE_ACCESS_TOKEN or not LINE_USER_ID) and os.path.exists(LINE_SECRET_FILE):
     try:
-        with open(LINE_SECRET_FILE, "r", encoding="utf-8") as f:
+        with open(LINE_SECRET_FILE, encoding="utf-8") as f:
             secrets = json.load(f)
             LINE_ACCESS_TOKEN = secrets.get("LINE_ACCESS_TOKEN")
             LINE_USER_ID = secrets.get("LINE_USER_ID")
@@ -203,7 +203,7 @@ def build_message(df_full, target_date, watchlist, alert_rules):
     SEP = "----------------------"
     HEADER = "======================"
 
-    parts = [f"【連接器供應鏈】主力動向", f"📅 {target_date_str}"]
+    parts = ["【連接器供應鏈】主力動向", f"📅 {target_date_str}"]
 
     if ranking_results or condition_hits_grouped:
         parts.append(HEADER)

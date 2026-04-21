@@ -2,23 +2,22 @@
 from __future__ import annotations
 
 import datetime
-import re
 import time
-import urllib3
 from datetime import timedelta
 
 import requests
+import urllib3
 import yfinance as yf
 
 from lib.logger import get_logger
+from lib.parsers import parse_fubon_html
 from lib.sheet import SheetNotReady, open_sheet
-from settings import BROKER_ID
 
 log = get_logger(__name__)
 
 BASE_URL = (
     "https://fubon-ebrokerdj.fbs.com.tw/z/zg/zgb/zgb0.djhtm"
-    f"?a=9A00&b=0039004100390031&c=B"
+    "?a=9A00&b=0039004100390031&c=B"
 )
 HEADER_ROW = ["日期", "代號", "名稱", "買賣別", "買賣超金額(千)", "收盤價", "估算張數"]
 DAYS_TO_CRAWL = 30
@@ -62,37 +61,25 @@ def _fetch_day(date_str: str) -> list[list]:
         return []
 
     response.encoding = "cp950"
-    raw_text = response.text
-
-    pattern = (
-        r"GenLink2stk\('([A-Z0-9]+)','([^']+)'\);[\s\S]*?"
-        r">([-0-9,]+)<[\s\S]*?>([-0-9,]+)<[\s\S]*?>([-0-9,]+)<"
-    )
-    matches = re.findall(pattern, raw_text)
-    if not matches:
+    stocks = parse_fubon_html(response.text)
+    if not stocks:
         log.warning("   ⚠️  該日期無資料 (可能是國定假日或颱風假)。")
         return []
 
-    log.info(f"   🔍 找到 {len(matches)} 筆分點資料，開始查歷史股價...")
+    log.info(f"   🔍 找到 {len(stocks)} 筆分點資料，開始查歷史股價...")
 
     daily_data: list[list] = []
-    for m in matches:
-        try:
-            stock_id = m[0].replace("AS", "")
-            stock_name = m[1]
-            net_amt = int(m[4].replace(",", ""))
-        except ValueError:
-            continue
-
+    for s in stocks:
+        stock_id = s["id"]
+        net_amt = s["net_amt"]
         status = "買超" if net_amt > 0 else ("賣超" if net_amt < 0 else "平")
         price = get_historical_price(stock_id, date_str)
         estimated_sheets = int(round(net_amt / price)) if price and price > 0 else "N/A"
-
         daily_data.append(
             [
                 date_str,
                 stock_id,
-                stock_name,
+                s["name"],
                 status,
                 net_amt,
                 price if price else "查無",

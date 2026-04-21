@@ -11,16 +11,16 @@ def test_connection():
     try:
         # 1. 建立連線
         line_bot_api = LineBotApi(LINE_ACCESS_TOKEN)
-        
+
         # 2. 發送測試訊息
         print("正在發送訊息...")
         line_bot_api.push_message(
-            LINE_USER_ID, 
+            LINE_USER_ID,
             TextSendMessage(text="✨ 恭喜！LINE 機器人連線成功！\n這是來自 Python 的測試訊息。")
         )
-        
+
         print("✅ 發送成功！請檢查您的手機 LINE。")
-        
+
     except Exception as e:
         print(f"❌ 發送失敗，請檢查 Token 或 ID 是否正確。\n錯誤訊息: {e}")
 

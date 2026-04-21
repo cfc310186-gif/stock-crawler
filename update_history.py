@@ -1,12 +1,12 @@
 import json
 import random
 import time
-from io import StringIO
 
 import pandas as pd
 import requests
 
 from lib.logger import get_logger
+from lib.parsers import parse_histock_history
 from lib.sheet import SheetNotReady, open_sheet, overwrite_sheet
 from settings import BROKER_ID, PROGRESS_FILE
 
@@ -51,14 +51,14 @@ def get_google_sheet_data():
 
 def fetch_histock_history(stock_id):
     url = f"https://histock.tw/stock/brokertrace.aspx?bno={BROKER_ID}&no={stock_id}"
-    
+
     headers = {
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
         "Cookie": HISTOCK_COOKIE
     }
 
     max_retries = 3
-    for attempt in range(max_retries):
+    for _attempt in range(max_retries):
         try:
             sleep_time = random.uniform(5.0, 10.0)
             log.info(f"(休息 {int(sleep_time)}s)...")
@@ -77,49 +77,7 @@ def fetch_histock_history(stock_id):
                     return {}
                 return {}
 
-            dfs = pd.read_html(StringIO(response.text))
-            target_df = None
-            
-            for df in dfs:
-                if "買進均價" in df.columns and "日期" in df.columns:
-                    target_df = df
-                    break
-            
-            if target_df is None:
-                return {}
-
-            history_map = {}
-            for _, row in target_df.iterrows():
-                date_str = str(row["日期"]).replace("/", "-")
-                try:
-                    buy_vol = pd.to_numeric(row["買進張數"], errors='coerce')
-                    buy_avg = pd.to_numeric(row["買進均價"], errors='coerce')
-                    sell_vol = pd.to_numeric(row["賣出張數"], errors='coerce')
-                    sell_avg = pd.to_numeric(row["賣出均價"], errors='coerce')
-                    close_price = pd.to_numeric(row["收盤價"], errors='coerce')
-
-                    net_vol = int(buy_vol - sell_vol)
-                    total_buy_val = buy_vol * buy_avg
-                    total_sell_val = sell_vol * sell_avg
-                    net_amount = total_buy_val - total_sell_val
-                    
-                    real_cost = 0.0
-                    if net_vol != 0:
-                        real_cost = round((net_amount / net_vol), 1)
-                    else:
-                        real_cost = close_price 
-
-                    net_amount_k = int(net_amount / 1000)
-                    
-                    history_map[date_str] = {
-                        "real_cost": real_cost,
-                        "net_vol": net_vol,
-                        "net_amt_k": net_amount_k
-                    }
-                except (ValueError, KeyError, TypeError):
-                    continue
-
-            return history_map
+            return parse_histock_history(response.text)
 
         except requests.RequestException as e:
             log.warning(f"❌ 網路錯誤: {e}，重試...")

@@ -3,13 +3,11 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Optional
 
 import pandas as pd
 import yaml
 
 from settings import ALERTS_FILE
-
 
 _ALLOWED_VARS = {
     "net_sheets",
@@ -157,7 +155,7 @@ def compute_rankings(
     metric: str,
     direction: str,
     top_n: int,
-    watchlist_ids: Optional[set[str]] = None,
+    watchlist_ids: set[str] | None = None,
 ) -> list[dict]:
     """計算「近 N 日買/賣超前 M 大」— 僅考慮 watchlist 內股票"""
     if metric not in {"net_sheets", "net_amount_k"}:
@@ -202,7 +200,7 @@ def evaluate_rankings(
     df_full: pd.DataFrame,
     target_date: pd.Timestamp,
     rules: list[dict],
-    watchlist_ids: Optional[set[str]] = None,
+    watchlist_ids: set[str] | None = None,
 ) -> dict[str, dict]:
     """跑所有 ranking 規則。回傳 {rule_name: {emoji, records, metric, direction, window_days}}"""
     result: dict[str, list[dict]] = {}

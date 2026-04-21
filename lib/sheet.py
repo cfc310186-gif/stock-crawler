@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import json
 import os
-from typing import Iterable, Optional
+from collections.abc import Iterable
 
 import gspread
 import pandas as pd
@@ -56,7 +56,7 @@ def load_dataframe(
     numeric_cols: Iterable[str] = DEFAULT_NUMERIC_COLS,
     date_col: str = DEFAULT_DATE_COL,
     id_col: str = DEFAULT_ID_COL,
-) -> Optional[pd.DataFrame]:
+) -> pd.DataFrame | None:
     """讀取 sheet 並回傳預處理過的 DataFrame。Sheet 空時回傳 None。"""
     sheet = open_sheet(sheet_name)
     data = sheet.get_all_values()

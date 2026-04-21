@@ -1,0 +1,38 @@
+<html><body>
+<table class="t01">
+<tr><th>代號</th><th>名稱</th><th>買進</th><th>賣出</th><th>買賣超(千)</th></tr>
+
+<tr>
+  <td><a href="#" onclick="GenLink2stk('AS2330','台積電');">2330</a></td>
+  <td>台積電</td>
+  <td align="right">1,234</td>
+  <td align="right">567</td>
+  <td align="right">-12,345</td>
+</tr>
+
+<tr>
+  <td><a href="#" onclick="GenLink2stk('AS3035','智原');">3035</a></td>
+  <td>智原</td>
+  <td align="right">2,000</td>
+  <td align="right">500</td>
+  <td align="right">8,888</td>
+</tr>
+
+<tr>
+  <td><a href="#" onclick="GenLink2stk('AS3443','創意');">3443</a></td>
+  <td>創意</td>
+  <td align="right">100</td>
+  <td align="right">100</td>
+  <td align="right">0</td>
+</tr>
+
+<!-- 重複股票 (不同一列但同 id) → 應該去重 -->
+<tr>
+  <td><a href="#" onclick="GenLink2stk('AS2330','台積電');">2330</a></td>
+  <td>台積電</td>
+  <td align="right">999</td>
+  <td align="right">999</td>
+  <td align="right">-9,999</td>
+</tr>
+</table>
+</body></html>

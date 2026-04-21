@@ -1,0 +1,19 @@
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
+addopts = "-ra -q"
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+exclude = [".venv", "venv", "build", "dist", "__pycache__"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "UP", "B"]
+ignore = [
+    "E501",  # 行長交給 formatter
+    "B008",  # 允許 def foo(x: Path = WATCHLIST_FILE)
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["E402"]

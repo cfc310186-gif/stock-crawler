@@ -1,11 +1,11 @@
 import datetime
-import re
 import sys
 
 import requests
 import yfinance as yf
 
 from lib.logger import get_logger
+from lib.parsers import parse_fubon_html
 from lib.sheet import SheetNotReady, open_sheet
 
 log = get_logger(__name__)
@@ -51,40 +51,14 @@ def get_today_stock_list_from_fubon():
         return []
 
     raw_html = res.content.decode("big5", errors="ignore")
+    stocks = parse_fubon_html(raw_html)
 
-    pattern = (
-        r"GenLink2stk\('AS(\d{4})','(.*?)'\);[\s\S]*?"
-        r"<td[^>]*>\s*([0-9,]+)\s*</td>[\s\S]*?"
-        r"<td[^>]*>\s*([0-9,]+)\s*</td>[\s\S]*?"
-        r"<td[^>]*>\s*(-?[0-9,]+)\s*</td>"
-    )
-    matches = re.findall(pattern, raw_html)
-
-    if not matches:
+    if not stocks:
         log.warning("❌ Regex 找不到資料，請確認今日是否為交易日。")
         return []
 
-    log.info(f"   🎉 成功抓取！Regex 掃描到 {len(matches)} 筆資料")
-
-    stock_data = []
-    for match in matches:
-        try:
-            stock_id = match[0]
-            stock_name = match[1]
-            net_amt_val = int(match[4].replace(",", ""))  # 單位已是千元
-        except ValueError:
-            continue
-        stock_data.append({"id": stock_id, "name": stock_name, "net_amt": net_amt_val})
-
-    seen = set()
-    unique_stocks = []
-    for s in stock_data:
-        if s["id"] not in seen:
-            unique_stocks.append(s)
-            seen.add(s["id"])
-
-    log.info(f"✅ 解析完成，抓到 {len(unique_stocks)} 檔股票。")
-    return unique_stocks
+    log.info(f"✅ 解析完成，抓到 {len(stocks)} 檔股票。")
+    return stocks
 
 
 def get_close_price_fallback(stock_id: str) -> float:
