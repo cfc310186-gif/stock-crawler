@@ -42,7 +42,7 @@ alerts:
   - name: "近 3 日買超前 3 大"
     kind: ranking
     window_days: 3
-    metric: net_sheets
+    metric: net_amount_k
     direction: buy
     top_n: 3
     emoji: "🏆"
@@ -50,7 +50,7 @@ alerts:
   - name: "近 3 日賣超前 3 大"
     kind: ranking
     window_days: 3
-    metric: net_sheets
+    metric: net_amount_k
     direction: sell
     top_n: 3
     emoji: "🧊"
