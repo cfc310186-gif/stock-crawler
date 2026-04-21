@@ -27,6 +27,10 @@ log = get_logger(__name__)
 
 
 def main() -> int:
+    print(f"[debug] ROOT = {ROOT}", flush=True)
+    print(f"[debug] WATCHLIST_FILE = {WATCHLIST_FILE}", flush=True)
+    print(f"[debug] exists = {WATCHLIST_FILE.exists()}", flush=True)
+
     if not WATCHLIST_FILE.exists():
         log.error(f"❌ 找不到 {WATCHLIST_FILE}，無資料可搬運。")
         return 1
@@ -35,6 +39,7 @@ def main() -> int:
         raw = yaml.safe_load(f) or {}
 
     stocks = raw.get("stocks", [])
+    print(f"[debug] 讀到 stocks 數量 = {len(stocks)}", flush=True)
     if not stocks:
         log.error("❌ YAML 中沒有 stocks 條目。")
         return 1
@@ -54,7 +59,11 @@ def main() -> int:
     except SheetNotReady as e:
         log.error(f"❌ Sheet 連線失敗: {e}")
         return 1
+    except Exception as e:  # noqa: BLE001
+        log.error(f"❌ 開 Sheet 失敗 ({type(e).__name__}): {e}")
+        return 1
 
+    print(f"[debug] 已取得 worksheet: {getattr(ws, 'title', ws)}", flush=True)
     _save_rows(rows, ws)
     log.info("✅ 搬運完成。Sheet 的 Watchlist 分頁已更新。")
     return 0
