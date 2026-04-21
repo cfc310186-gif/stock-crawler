@@ -9,7 +9,13 @@
 from __future__ import annotations
 
 import sys
-from pathlib import Path
+
+print(f"[boot] python = {sys.executable}", flush=True)
+print(f"[boot] version = {sys.version}", flush=True)
+print(f"[boot] __name__ = {__name__}", flush=True)
+print("[boot] importing deps...", flush=True)
+
+from pathlib import Path  # noqa: E402
 
 # 讓 `python scripts/xxx.py` 能直接 import 專案 lib/settings
 ROOT = Path(__file__).resolve().parent.parent
@@ -23,6 +29,7 @@ from lib.sheet import SheetNotReady  # noqa: E402
 from lib.watchlist import _get_worksheet, _save_rows  # noqa: E402
 from settings import WATCHLIST_FILE  # noqa: E402
 
+print("[boot] imports done", flush=True)
 log = get_logger(__name__)
 
 
@@ -69,5 +76,10 @@ def main() -> int:
     return 0
 
 
+print(f"[boot] __name__ at bottom = {__name__}", flush=True)
+
 if __name__ == "__main__":
+    print("[boot] entering main()...", flush=True)
     raise SystemExit(main())
+else:
+    print("[boot] NOT entering main() because __name__ != __main__", flush=True)
