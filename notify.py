@@ -1,24 +1,27 @@
-import pandas as pd
-import gspread
-from oauth2client.service_account import ServiceAccountCredentials
-import os
-import json
 import datetime
+import json
+import os
+import warnings
+
+import pandas as pd
+import yfinance as yf
 from linebot import LineBotApi
 from linebot.models import TextSendMessage
-import warnings
-import yfinance as yf
 
-from settings import SHEET_NAME, JSON_FILE_NAME, LINE_SECRET_FILE
-from lib.watchlist import load_watchlist
 from lib.alerts import (
     AlertHit,
     evaluate_conditions,
     evaluate_rankings,
     load_alerts,
 )
+from lib.logger import get_logger
+from lib.sheet import SheetNotReady, load_dataframe
+from lib.watchlist import load_watchlist
+from settings import LINE_SECRET_FILE
 
 warnings.filterwarnings("ignore", category=UserWarning)
+
+log = get_logger(__name__)
 
 
 LINE_ACCESS_TOKEN = os.environ.get("LINE_ACCESS_TOKEN")
@@ -30,9 +33,9 @@ if (not LINE_ACCESS_TOKEN or not LINE_USER_ID) and os.path.exists(LINE_SECRET_FI
             secrets = json.load(f)
             LINE_ACCESS_TOKEN = secrets.get("LINE_ACCESS_TOKEN")
             LINE_USER_ID = secrets.get("LINE_USER_ID")
-        print("💻 偵測到本機密碼檔，已載入 LINE 設定。")
-    except Exception as e:
-        print(f"⚠️ 讀取 line_secret.json 失敗: {e}")
+        log.info("💻 偵測到本機密碼檔，已載入 LINE 設定。")
+    except (OSError, json.JSONDecodeError) as e:
+        log.warning(f"⚠️ 讀取 {LINE_SECRET_FILE} 失敗: {e}")
 
 
 def get_market_data(stock_id, target_date_str):
@@ -40,55 +43,28 @@ def get_market_data(stock_id, target_date_str):
     try:
         stock = yf.Ticker(f"{stock_id}.TW")
         hist = stock.history(period="1mo")
-        if hist.empty:
-            return None
-        hist.index = hist.index.strftime('%Y-%m-%d')
-
-        if target_date_str not in hist.index:
-            return None
-
-        target_idx = hist.index.get_loc(target_date_str)
-        total_vol = int(hist.iloc[target_idx]['Volume'] / 1000)
-        close_price = float(hist.iloc[target_idx]['Close'])
-
-        if target_idx > 0:
-            prev_close = float(hist.iloc[target_idx - 1]['Close'])
-            pct_change = round(((close_price - prev_close) / prev_close) * 100, 2)
-        else:
-            pct_change = 0.0
-
-        return close_price, pct_change, total_vol
-    except Exception as e:
-        print(f"⚠️ yfinance 失敗 ({stock_id}): {e}")
+    except Exception as e:  # yfinance 內部例外類型多變
+        log.warning(f"⚠️ yfinance 失敗 ({stock_id}): {e}")
         return None
 
+    if hist.empty:
+        return None
+    hist.index = hist.index.strftime("%Y-%m-%d")
 
-def _load_sheet_df():
-    scope = ["https://spreadsheets.google.com/feeds", 'https://www.googleapis.com/auth/drive']
-    if not os.path.exists(JSON_FILE_NAME):
-        print("❌ 找不到 service_account.json")
+    if target_date_str not in hist.index:
         return None
 
-    creds = ServiceAccountCredentials.from_json_keyfile_name(JSON_FILE_NAME, scope)
-    client = gspread.authorize(creds)
-    sheet = client.open(SHEET_NAME).sheet1
-    data = sheet.get_all_values()
-    if not data:
-        return None
+    target_idx = hist.index.get_loc(target_date_str)
+    total_vol = int(hist.iloc[target_idx]["Volume"] / 1000)
+    close_price = float(hist.iloc[target_idx]["Close"])
 
-    headers = data[0]
-    rows = data[1:]
-    df = pd.DataFrame(rows, columns=headers)
+    if target_idx > 0:
+        prev_close = float(hist.iloc[target_idx - 1]["Close"])
+        pct_change = round(((close_price - prev_close) / prev_close) * 100, 2)
+    else:
+        pct_change = 0.0
 
-    for col in ["買賣超金額(千)", "收盤價", "估算張數"]:
-        if col in df.columns:
-            df[col] = pd.to_numeric(
-                df[col].astype(str).str.replace(',', ''), errors='coerce'
-            ).fillna(0)
-
-    df["日期"] = pd.to_datetime(df["日期"])
-    df["代號"] = df["代號"].astype(str)
-    return df
+    return close_price, pct_change, total_vol
 
 
 def _format_number_signed(value):
@@ -263,19 +239,23 @@ def build_message(df_full, target_date, watchlist, alert_rules):
 
 def send_line_notify():
     if not LINE_ACCESS_TOKEN or not LINE_USER_ID:
-        print("❌ 錯誤：找不到 LINE 金鑰。")
+        log.error("❌ 錯誤：找不到 LINE 金鑰。")
         return
 
     watchlist = load_watchlist()
     if not watchlist:
-        print("⚠️ Watchlist 為空，請檢查 config/watchlist.yaml")
+        log.warning("⚠️ Watchlist 為空，請檢查 config/watchlist.yaml")
         return
 
     alert_rules = load_alerts()
 
-    df = _load_sheet_df()
+    try:
+        df = load_dataframe()
+    except SheetNotReady as e:
+        log.error(f"❌ Sheet 連線失敗: {e}")
+        return
     if df is None:
-        print("⚠️ 試算表無資料")
+        log.warning("⚠️ 試算表無資料")
         return
 
     today_date = datetime.date.today()
@@ -285,21 +265,21 @@ def send_line_notify():
         target_date = today_date
     else:
         target_date = df["日期"].max().date()
-        print(f"⚠️ 今日無資料，改用最新日期: {target_date}")
+        log.warning(f"⚠️ 今日無資料，改用最新日期: {target_date}")
 
-    print(f"🔍 開始分析 {target_date} 資料 (讀取 Sheet 成本)...")
+    log.info(f"🔍 開始分析 {target_date} 資料 (讀取 Sheet 成本)...")
 
     message = build_message(df, target_date, watchlist, alert_rules)
     if not message:
-        print("✅ 今日無供應鏈股票動態，不發送。")
+        log.info("✅ 今日無供應鏈股票動態，不發送。")
         return
 
     try:
         line_bot_api = LineBotApi(LINE_ACCESS_TOKEN)
         line_bot_api.push_message(LINE_USER_ID, TextSendMessage(text=message))
-        print("🎉 LINE 通知發送成功！")
-    except Exception as e:
-        print(f"❌ 發送失敗: {e}")
+        log.info("🎉 LINE 通知發送成功！")
+    except Exception as e:  # line-bot-sdk 例外類型多樣
+        log.error(f"❌ 發送失敗: {e}")
 
 
 if __name__ == "__main__":

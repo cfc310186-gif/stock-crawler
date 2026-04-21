@@ -1,14 +1,16 @@
 import json
-import pandas as pd
-import gspread
-from oauth2client.service_account import ServiceAccountCredentials
-import requests
-from io import StringIO
-import time
-import os
 import random
+import time
+from io import StringIO
 
-from settings import SHEET_NAME, JSON_FILE_NAME, BROKER_ID, PROGRESS_FILE
+import pandas as pd
+import requests
+
+from lib.logger import get_logger
+from lib.sheet import SheetNotReady, open_sheet, overwrite_sheet
+from settings import BROKER_ID, PROGRESS_FILE
+
+log = get_logger(__name__)
 
 
 def _load_progress() -> dict:
@@ -18,8 +20,8 @@ def _load_progress() -> dict:
     try:
         with PROGRESS_FILE.open("r", encoding="utf-8") as f:
             return json.load(f)
-    except Exception as e:
-        print(f"⚠️ 進度檔讀取失敗，從頭開始: {e}")
+    except (OSError, json.JSONDecodeError) as e:
+        log.warning(f"⚠️ 進度檔讀取失敗，從頭開始: {e}")
         return {}
 
 
@@ -42,13 +44,10 @@ def _clear_progress() -> None:
 HISTOCK_COOKIE = """fastivalName_Mall_20250901=closeday_fastivalName_Mall_20250901; bottomADName_20250901=closeday_bottomADName_20250901; _ga=GA1.2.883474851.1764853127; _gid=GA1.2.1138309835.1764853127; _gcl_au=1.1.1514633677.1764853127; ASP.NET_SessionId=ysaqiwctn35yvzrnghvmhwkx; fastivalName_Mall_20250901=closeday_fastivalName_Mall_20250901; bottomADName_20250901=closeday_bottomADName_20250901; _fbp=fb.1.1764853128332.914008156798017180; g_state={"i_l":0,"i_ll":1764859240603}; NickName=%e6%9c%b1%e6%88%90%e7%99%bc; MemberNo=237143; Email=cfc310186@gmail.com; FCCDCF=%5Bnull%2Cnull%2Cnull%2Cnull%2Cnull%2Cnull%2C%5B%5B32%2C%22%5B%5C%2236fa5694-a897-4e1f-a361-0f21781bab77%5C%22%2C%5B1764853128%2C194000000%5D%5D%22%5D%5D%5D; FCNEC=%5B%5B%22AKsRol_SigZcC3HeRtE-2rN2YV6X0yl1u0Eap3N3jBnhcNudbLVyCoMNGMWcFYU5L_NQ0PFTHKNopt3CW0dlENaRbPcQSB909TRJ38vmMY6hPbmJS2zNjNBYN8TzMBb_PAT8uu_8pnaTImFr1yEap40SdYaHDRdDQg%3D%3D%22%5D%5D; _gat=1; _ga_S0YRRCXLNT=GS2.2.s1764858769$o2$g1$t1764859759$j60$l0$h0; __gads=ID=4e063a2b00eaa2bb:T=1764853127:RT=1764859758:S=ALNI_MbcZbkYFsYhcx-uy0GZW8Nz4brloQ; __gpi=UID=000011c2a0390cee:T=1764853127:RT=1764859758:S=ALNI_MYwDOZCjzWjIjuLF4qbz9AzClUyHw; __eoi=ID=b2587e00649fb403:T=1764853127:RT=1764859758:S=AA-AfjZbhiNRzqABXzKSn0Ty7qpf"""
 
 def get_google_sheet_data():
-    """讀取目前 Sheet 裡的所有資料"""
-    scope = ["https://spreadsheets.google.com/feeds", 'https://www.googleapis.com/auth/drive']
-    creds = ServiceAccountCredentials.from_json_keyfile_name(JSON_FILE_NAME, scope)
-    client = gspread.authorize(creds)
-    sheet = client.open(SHEET_NAME).sheet1
-    data = sheet.get_all_values()
-    return sheet, data
+    """讀取目前 Sheet 裡的所有資料 (沿用 lib.sheet 連線)"""
+    sheet = open_sheet()
+    return sheet, sheet.get_all_values()
+
 
 def fetch_histock_history(stock_id):
     url = f"https://histock.tw/stock/brokertrace.aspx?bno={BROKER_ID}&no={stock_id}"
@@ -58,27 +57,25 @@ def fetch_histock_history(stock_id):
         "Cookie": HISTOCK_COOKIE
     }
 
-    # 重試機制
     max_retries = 3
     for attempt in range(max_retries):
         try:
-            # 【策略調整】休息久一點 (5 ~ 10 秒)
             sleep_time = random.uniform(5.0, 10.0)
-            print(f"(休息 {int(sleep_time)}s)...", end=" ", flush=True)
+            log.info(f"(休息 {int(sleep_time)}s)...")
             time.sleep(sleep_time)
-            
+
             response = requests.get(url, headers=headers, timeout=15)
-            
+
             if response.status_code != 200:
-                print(f"⚠️ 狀態 {response.status_code}", end=" ")
+                log.warning(f"⚠️ 狀態 {response.status_code}")
                 if response.status_code in [403, 503, 429]:
-                    print("⛔ 被擋，冷卻 2 分鐘...")
-                    time.sleep(120) # 延長冷卻到 2 分鐘
-                    continue 
+                    log.warning("⛔ 被擋，冷卻 2 分鐘...")
+                    time.sleep(120)
+                    continue
                 if response.status_code == 302:
-                     print("⛔ Cookie 失效，請更新！")
-                     return {}
-                return {} 
+                    log.error("⛔ Cookie 失效，請更新！")
+                    return {}
+                return {}
 
             dfs = pd.read_html(StringIO(response.text))
             target_df = None
@@ -119,61 +116,75 @@ def fetch_histock_history(stock_id):
                         "net_vol": net_vol,
                         "net_amt_k": net_amount_k
                     }
-                except:
+                except (ValueError, KeyError, TypeError):
                     continue
-            
+
             return history_map
 
-        except Exception as e:
-            print(f"❌ 錯誤: {e}，重試...", end=" ")
+        except requests.RequestException as e:
+            log.warning(f"❌ 網路錯誤: {e}，重試...")
             time.sleep(10)
-    
+
     return {}
 
+def _flush_sheet(sheet, df: pd.DataFrame) -> None:
+    """把目前的 DataFrame 覆寫回 Sheet"""
+    overwrite_sheet(sheet, df)
+
+
 def main():
-    # --- 讀取進度檔 (自動接關) ---
     progress = _load_progress()
     start_index = int(progress.get("last_completed_index", -1)) + 1
     if start_index > 0:
-        print(f"🔁 偵測到上次進度：從第 {start_index} 筆繼續 ({progress.get('timestamp', '?')})")
+        log.info(
+            f"🔁 偵測到上次進度：從第 {start_index} 筆繼續 "
+            f"({progress.get('timestamp', '?')})"
+        )
     else:
-        print("🚀 啟動歷史資料清洗 (從頭開始)...")
+        log.info("🚀 啟動歷史資料清洗 (從頭開始)...")
 
     if len(HISTOCK_COOKIE) < 10:
-        print("❌ 請填入 Cookie！")
+        log.error("❌ 請填入 Cookie！")
         return
 
-    sheet, raw_data = get_google_sheet_data()
+    try:
+        sheet, raw_data = get_google_sheet_data()
+    except SheetNotReady as e:
+        log.error(f"❌ Sheet 連線失敗: {e}")
+        return
 
     if len(raw_data) < 2:
-        print("⚠️ Sheet 是空的")
+        log.warning("⚠️ Sheet 是空的")
         return
 
     headers = raw_data[0]
     df = pd.DataFrame(raw_data[1:], columns=headers)
 
     unique_stocks = df["代號"].unique()
-    print(f"📊 總股票數: {len(unique_stocks)}")
+    log.info(f"📊 總股票數: {len(unique_stocks)}")
 
     if start_index >= len(unique_stocks):
-        print("✅ 所有股票都已處理過，重置進度並從頭開始。若要保留當前進度請移除 .progress.json")
+        log.info("✅ 所有股票都已處理過，重置進度並從頭開始。")
         _clear_progress()
         start_index = 0
 
     target_stocks = unique_stocks[start_index:]
-    print(f"👉 本次將處理: {len(target_stocks)} 檔 (索引 {start_index} ~ {len(unique_stocks)-1})")
+    log.info(
+        f"👉 本次將處理: {len(target_stocks)} 檔 "
+        f"(索引 {start_index} ~ {len(unique_stocks) - 1})"
+    )
 
     total_updated = 0
 
     try:
         for i, stock_id in enumerate(target_stocks):
             current_idx = start_index + i
-            print(f"\n[{current_idx}/{len(unique_stocks)}] 處理 {stock_id}", end=" ")
+            log.info(f"[{current_idx}/{len(unique_stocks)}] 處理 {stock_id}")
 
             hist_data = fetch_histock_history(stock_id)
 
             if not hist_data:
-                print("無資料/跳過", end="")
+                log.info("   無資料/跳過")
                 _save_progress(current_idx)
                 continue
 
@@ -182,7 +193,7 @@ def main():
 
             match_count = 0
             for idx_row in target_indices:
-                row_date = pd.to_datetime(df.at[idx_row, "日期"]).strftime('%Y-%m-%d')
+                row_date = pd.to_datetime(df.at[idx_row, "日期"]).strftime("%Y-%m-%d")
                 if row_date in hist_data:
                     new_data = hist_data[row_date]
                     df.at[idx_row, "買賣超金額(千)"] = new_data["net_amt_k"]
@@ -191,40 +202,34 @@ def main():
                     match_count += 1
                     total_updated += 1
 
-            print(f"✅ 更新 {match_count} 筆", end=" ")
+            log.info(f"   ✅ 更新 {match_count} 筆")
             _save_progress(current_idx)
 
-            # 每 10 檔存一次 (頻率高一點比較保險)
             if (i + 1) % 10 == 0:
-                print(f"\n💾 存檔中...", end=" ")
+                log.info("💾 存檔中...")
                 try:
-                    output_data = [df.columns.values.tolist()] + df.values.tolist()
-                    sheet.clear()
-                    sheet.update(output_data)
-                    print("🆗", end=" ")
-                except Exception as e:
-                    print(f"⚠️ 失敗: {e}", end=" ")
+                    _flush_sheet(sheet, df)
+                    log.info("🆗 已寫入 Sheet。")
+                except Exception as e:  # gspread 例外類型多樣
+                    log.warning(f"⚠️ 寫入失敗: {e}")
     except KeyboardInterrupt:
-        print("\n⏸️ 手動中斷。進度已保存，下次執行將自動接續。")
-        output_data = [df.columns.values.tolist()] + df.values.tolist()
+        log.warning("⏸️ 手動中斷。進度已保存，下次執行將自動接續。")
         try:
-            sheet.clear()
-            sheet.update(output_data)
-            print("✅ 中斷前已寫入 Sheet。")
+            _flush_sheet(sheet, df)
+            log.info("✅ 中斷前已寫入 Sheet。")
         except Exception as e:
-            print(f"⚠️ 中斷寫入失敗: {e}")
+            log.warning(f"⚠️ 中斷寫入失敗: {e}")
         return
 
-    print(f"\n\n🎉 全部完成！共更新 {total_updated} 筆。")
-    output_data = [df.columns.values.tolist()] + df.values.tolist()
+    log.info(f"🎉 全部完成！共更新 {total_updated} 筆。")
     try:
-        sheet.clear()
-        sheet.update(output_data)
-        print("✅ 最終寫入成功！")
+        _flush_sheet(sheet, df)
+        log.info("✅ 最終寫入成功！")
         _clear_progress()
-        print("🧹 已清除進度檔。")
+        log.info("🧹 已清除進度檔。")
     except Exception as e:
-        print(f"❌ 最終寫入失敗: {e}")
+        log.error(f"❌ 最終寫入失敗: {e}")
+
 
 if __name__ == "__main__":
     main()
