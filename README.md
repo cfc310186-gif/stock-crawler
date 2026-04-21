@@ -32,22 +32,22 @@ HiStock HTML ──► update_history.py ─┤
 
 ## 設定檔
 
-### `config/watchlist.yaml`
-統一的關注股票清單，`main.py` / `notify.py` / `app.py` 皆讀取此檔。
+### Watchlist (Google Sheet 分頁 `Watchlist`)
+統一的關注股票清單儲存在 Sheet 中；`notify.py` / `app.py` 皆讀取同一分頁。
+這樣設計讓 Streamlit Cloud 的寫入 (⭐ 按鈕) 能直接被 GitHub Actions 的排程讀到，
+避免部署環境檔案系統 ephemeral 造成的同步問題。
 
-```yaml
-stocks:
-  - id: "3035"
-    name: 智原
-    category: AI/高速傳輸
-category_emojis:
-  AI/高速傳輸: 🚀
-  車用/工控: 🚗
-  消費電子: 💻
-  上游材料: ⚙️
+欄位：`id | name | category`，分類 emoji 硬編於 `lib/watchlist.py`
+(AI/高速傳輸 🚀、車用/工控 🚗、消費電子 💻、上游材料 ⚙️)。
+
+首次啟用：從既有 `config/watchlist.yaml` 搬到 Sheet。
+
+```bash
+python scripts/migrate_watchlist_to_sheet.py
 ```
 
-可直接在 Streamlit 介面透過 ⭐ 按鈕新增 / 移除股票，寫回 YAML。
+完成後，舊的 `config/watchlist.yaml` 可保留作備份或刪除。
+後續都在 Streamlit 介面透過 ⭐ 按鈕即時新增 / 移除。
 
 ### `config/alerts.yaml`
 告警規則引擎。一般規則用 `when:` DSL，排行榜規則使用 `kind: ranking`。
@@ -142,12 +142,14 @@ ruff check .
 ├── app.py               # Streamlit 儀表板
 ├── settings.py          # 共用常數
 ├── config/
-│   ├── watchlist.yaml   # 關注清單
+│   ├── watchlist.yaml   # (已棄用，僅供 migration) 現已改存於 Sheet 的 Watchlist 分頁
 │   └── alerts.yaml      # 告警規則
+├── scripts/
+│   └── migrate_watchlist_to_sheet.py  # 一次性：YAML → Sheet
 ├── lib/
 │   ├── sheet.py         # Google Sheet 連線 + DataFrame 讀寫
 │   ├── logger.py        # 共用 logger (支援 LOG_LEVEL)
-│   ├── watchlist.py     # watchlist CRUD
+│   ├── watchlist.py     # watchlist CRUD (Sheet-backed)
 │   └── alerts.py        # 告警規則引擎 (condition + ranking)
 └── .github/workflows/
     └── main.yml         # 排程
