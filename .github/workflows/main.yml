@@ -2,8 +2,12 @@ name: Daily Stock Crawler & Notify
 
 on:
   schedule:
-    # 台灣時間 16:30 (UTC 08:30)
-    - cron: '30 11 * * 1-5'
+    # 目標台灣時間 19:30 (UTC 11:30)
+    # 實際排在 UTC 11:07，因為 GitHub Actions 在整點/半點 (:00, :30)
+    # runner 佇列極度壅塞，常被延遲 30 分鐘以上；改成冷門分鐘 (:07)
+    # 並提前 23 分鐘，讓實際觸發時間能維持在 19:30 附近。
+    # 參考: https://docs.github.com/en/actions/writing-workflows/choosing-when-your-workflow-runs/events-that-trigger-workflows#schedule
+    - cron: '7 11 * * 1-5'
   workflow_dispatch:
 
 jobs:
