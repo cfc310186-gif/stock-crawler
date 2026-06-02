@@ -1,4 +1,3 @@
-import datetime
 import sys
 
 import requests
@@ -6,6 +5,7 @@ import yfinance as yf
 
 from lib.logger import get_logger
 from lib.parsers import parse_fubon_html
+from lib.run_date import TARGET_DATE_ENV, resolve_target_date
 from lib.sheet import SheetNotReady, open_sheet
 
 log = get_logger(__name__)
@@ -15,7 +15,9 @@ HEADER_ROW = ["日期", "代號", "名稱", "買賣別", "買賣超金額(千)",
 
 
 def check_and_get_date() -> str:
-    today = datetime.date.today()
+    today, from_env = resolve_target_date()
+    if from_env:
+        log.info(f"Using {TARGET_DATE_ENV} override: {today}")
     weekday = today.weekday()  # 0=週一, ..., 5=週六, 6=週日
     if weekday >= 5:
         day_str = "週六" if weekday == 5 else "週日"

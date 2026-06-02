@@ -9,12 +9,27 @@ on:
     # 參考: https://docs.github.com/en/actions/writing-workflows/choosing-when-your-workflow-runs/events-that-trigger-workflows#schedule
     - cron: '7 11 * * 1-5'
   workflow_dispatch:
+    inputs:
+      target_date:
+        description: 'Target trading date, YYYY-MM-DD. Leave empty to auto-detect.'
+        required: false
+        type: string
 
 jobs:
   build:
     runs-on: ubuntu-latest
+    env:
+      TARGET_DATE: ${{ github.event.inputs.target_date || '' }}
 
     steps:
+    - name: Print schedule diagnostics
+      run: |
+        echo "event_name=${{ github.event_name }}"
+        echo "schedule_cron=7 11 * * 1-5"
+        echo "target_date=${TARGET_DATE:-auto}"
+        echo "run_started_utc=$(date -u '+%Y-%m-%dT%H:%M:%SZ')"
+        TZ=Asia/Taipei date '+run_started_taipei=%Y-%m-%dT%H:%M:%S%z'
+
     - name: Checkout code
       uses: actions/checkout@v3
 

@@ -1,4 +1,3 @@
-import datetime
 import json
 import os
 import warnings
@@ -15,6 +14,7 @@ from lib.alerts import (
     load_alerts,
 )
 from lib.logger import get_logger
+from lib.run_date import TARGET_DATE_ENV, resolve_target_date
 from lib.sheet import SheetNotReady, load_dataframe
 from lib.watchlist import load_watchlist
 from settings import LINE_SECRET_FILE
@@ -255,10 +255,15 @@ def send_line_notify():
         log.warning("⚠️ 試算表無資料")
         return
 
-    today_date = datetime.date.today()
+    today_date, from_env = resolve_target_date()
+    if from_env:
+        log.info(f"Using {TARGET_DATE_ENV} override: {today_date}")
+
     today_ts = pd.Timestamp(today_date)
 
-    if not df[df["日期"] == today_ts].empty:
+    if from_env:
+        target_date = today_date
+    elif not df[df["日期"] == today_ts].empty:
         target_date = today_date
     else:
         target_date = df["日期"].max().date()
