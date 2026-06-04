@@ -8,7 +8,7 @@ Taiwan 股市籌碼雷達：每日抓富邦證券分點 (永豐金-松山 `9A91`
 
 | 檔案 | 說明 |
 |---|---|
-| `main.py` | 每日爬 Fubon + yfinance，覆寫 Google Sheet 當日資料 (GitHub Actions 排程) |
+| `main.py` | 每日爬 Fubon + yfinance，覆寫 Google Sheet 當日資料 (外部 scheduler 觸發 GitHub Actions) |
 | `history.py` | 手動補抓過去 30 天歷史資料，逐日寫入 Sheet |
 | `update_history.py` | 透過 HiStock 分點明細重算「真實主力成本」，支援 `.progress.json` 中斷續跑 |
 | `notify.py` | 讀 Sheet 當日資料，比對 Watchlist + 執行告警規則，LINE 推播 |
@@ -116,8 +116,8 @@ python notify.py
 streamlit run app.py
 ```
 
-### GitHub Actions 排程
-`.github/workflows/main.yml`：週一至週五 UTC 11:30 (台灣 19:30) 依序執行 `main.py` → `notify.py`。
+### 每日自動執行
+外部 scheduler 於週一至週五台灣時間 19:30 呼叫 `.github/workflows/main.yml` 的 `workflow_dispatch`，依序執行 `main.py` → `notify.py`。設定方式見 `docs/external-scheduler.md`。
 
 ---
 

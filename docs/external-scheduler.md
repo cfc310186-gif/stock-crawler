@@ -109,4 +109,4 @@ target_date=auto
 run_started_taipei=...
 ```
 
-Keep the existing GitHub `schedule` as a backup for the first few trading days. After the external scheduler is stable, remove the GitHub `schedule` block to avoid duplicate same-day runs.
+The GitHub-native `schedule` trigger has been removed. The external scheduler is now the only automatic trigger, preventing duplicate same-day runs.
