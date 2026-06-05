@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import json
 import os
+import time
 from collections.abc import Iterable
 
 import gspread
@@ -45,10 +46,30 @@ def get_client() -> gspread.Client:
     return gspread.authorize(creds)
 
 
+def _open_spreadsheet_with_retries(
+    client: gspread.Client,
+    sheet_name: str,
+    attempts: int = 3,
+    delay_seconds: float = 2.0,
+):
+    last_error: Exception | None = None
+    for attempt in range(1, attempts + 1):
+        try:
+            return client.open(sheet_name)
+        except gspread.exceptions.SpreadsheetNotFound as e:
+            last_error = e
+            if attempt == attempts:
+                break
+            time.sleep(delay_seconds)
+
+    assert last_error is not None
+    raise last_error
+
+
 def open_sheet(sheet_name: str = SHEET_NAME):
     """打開試算表並回傳第一頁 worksheet"""
     client = get_client()
-    return client.open(sheet_name).sheet1
+    return _open_spreadsheet_with_retries(client, sheet_name).sheet1
 
 
 def load_dataframe(
