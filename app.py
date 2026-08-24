@@ -11,6 +11,7 @@ from lib.sheet import (
     load_credentials_from_json_string,
     load_dataframe,
 )
+from lib.stock_search import search_stocks
 from lib.watchlist import (
     add_stock,
     get_categories,
@@ -273,7 +274,35 @@ else:
         st.session_state.selected_stock_name = row["名稱"]
 
 
-# --- 8. 個股分析 (同頁下方) ---
+# --- 8. 直接搜尋 ---
+st.markdown("#### 🔎 直接搜尋個股")
+search_query = st.text_input(
+    "輸入股票代號或名稱",
+    placeholder="例如：2330、台積電",
+    key="stock_search_query",
+)
+
+if search_query.strip():
+    search_results = search_stocks(df_raw, search_query)
+    if search_results.empty:
+        st.warning("找不到符合的股票，請確認代號或名稱。")
+    else:
+        search_labels = [
+            f"{row['代號']}｜{row['名稱']}" for _, row in search_results.iterrows()
+        ]
+        selected_label = st.selectbox(
+            "搜尋結果",
+            search_labels,
+            key="stock_search_result",
+            label_visibility="collapsed",
+        )
+        selected_index = search_labels.index(selected_label)
+        selected_stock = search_results.iloc[selected_index]
+        st.session_state.selected_stock_id = selected_stock["代號"]
+        st.session_state.selected_stock_name = selected_stock["名稱"]
+
+
+# --- 9. 個股分析 (同頁下方) ---
 st.markdown("---")
 st.markdown("#### 📊 個股分析")
 
