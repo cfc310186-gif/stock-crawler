@@ -1,4 +1,5 @@
 import sys
+import time
 
 import requests
 import yfinance as yf
@@ -12,6 +13,9 @@ log = get_logger(__name__)
 log.info("✅ 正在執行 main.py [v20.0 共用模組版]")
 
 HEADER_ROW = ["日期", "代號", "名稱", "買賣別", "買賣超金額(千)", "收盤價", "估算張數"]
+FUBON_TIMEOUT_SECONDS = 15
+FUBON_MAX_ATTEMPTS = 3
+FUBON_RETRY_DELAY_SECONDS = 5
 
 
 def check_and_get_date() -> str:
@@ -30,6 +34,31 @@ TARGET_DATE_STR = check_and_get_date()
 log.info(f"📅 目標日期: {TARGET_DATE_STR}")
 
 
+def fetch_fubon_html(real_url: str, headers: dict[str, str]) -> str:
+    last_error: requests.RequestException | None = None
+
+    for attempt in range(1, FUBON_MAX_ATTEMPTS + 1):
+        try:
+            res = requests.get(real_url, headers=headers, timeout=FUBON_TIMEOUT_SECONDS)
+            res.raise_for_status()
+            return res.content.decode("big5", errors="ignore")
+        except requests.RequestException as e:
+            last_error = e
+            if attempt >= FUBON_MAX_ATTEMPTS:
+                break
+
+            log.warning(
+                "⚠️ 富邦請求失敗，第 %s/%s 次，%s 秒後重試: %s",
+                attempt,
+                FUBON_MAX_ATTEMPTS,
+                FUBON_RETRY_DELAY_SECONDS,
+                e,
+            )
+            time.sleep(FUBON_RETRY_DELAY_SECONDS)
+
+    raise RuntimeError(f"富邦請求重試 {FUBON_MAX_ATTEMPTS} 次後仍失敗: {last_error}")
+
+
 def get_today_stock_list_from_fubon():
     log.info("🔍 正在從富邦證券抓取交易名單...")
 
@@ -46,13 +75,7 @@ def get_today_stock_list_from_fubon():
         )
     }
 
-    try:
-        res = requests.get(real_url, headers=headers, timeout=15)
-    except requests.RequestException as e:
-        log.error(f"❌ 富邦請求失敗: {e}")
-        return []
-
-    raw_html = res.content.decode("big5", errors="ignore")
+    raw_html = fetch_fubon_html(real_url, headers)
     stocks = parse_fubon_html(raw_html)
 
     if not stocks:
