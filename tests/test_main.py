@@ -44,7 +44,7 @@ def test_fetch_fubon_html_raises_after_exhausted_retries(monkeypatch) -> None:
     try:
         main.fetch_fubon_html("https://example.test", {"User-Agent": "test"})
     except RuntimeError as exc:
-        assert "重試 3 次後仍失敗" in str(exc)
+        assert f"重試 {main.FUBON_MAX_ATTEMPTS} 次後仍失敗" in str(exc)
     else:
         raise AssertionError("fetch_fubon_html should fail after retries")
 

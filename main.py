@@ -1,3 +1,4 @@
+import os
 import sys
 import time
 
@@ -13,9 +14,26 @@ log = get_logger(__name__)
 log.info("✅ 正在執行 main.py [v20.0 共用模組版]")
 
 HEADER_ROW = ["日期", "代號", "名稱", "買賣別", "買賣超金額(千)", "收盤價", "估算張數"]
-FUBON_TIMEOUT_SECONDS = 15
-FUBON_MAX_ATTEMPTS = 3
-FUBON_RETRY_DELAY_SECONDS = 5
+
+
+def get_positive_int_env(name: str, default: int) -> int:
+    raw_value = os.environ.get(name, "").strip()
+    if not raw_value:
+        return default
+    try:
+        value = int(raw_value)
+    except ValueError:
+        log.warning("⚠️ %s=%r 不是整數，使用預設值 %s", name, raw_value, default)
+        return default
+    if value <= 0:
+        log.warning("⚠️ %s=%r 必須大於 0，使用預設值 %s", name, raw_value, default)
+        return default
+    return value
+
+
+FUBON_TIMEOUT_SECONDS = get_positive_int_env("FUBON_TIMEOUT_SECONDS", 30)
+FUBON_MAX_ATTEMPTS = get_positive_int_env("FUBON_MAX_ATTEMPTS", 5)
+FUBON_RETRY_DELAY_SECONDS = get_positive_int_env("FUBON_RETRY_DELAY_SECONDS", 10)
 
 
 def check_and_get_date() -> str:
